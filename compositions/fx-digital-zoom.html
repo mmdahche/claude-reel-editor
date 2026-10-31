@@ -1,0 +1,183 @@
+<!doctype html>
+<!--
+  fx-digital-zoom:
+  the look that rides on a hard punch-in. The punch itself is the shot list's free-face scale
+  change (a hard cut between face runs); this OVERLAY (z 30, in front of the face, under the
+  captions) adds a viewfinder: four corner brackets that snap in, tighter at each level, plus a
+  subtle film grain, a soft vignette and faint scan lines from level 1. Grain is SVG fractal
+  noise jittered once per frame from a fixed seed (deterministic on every render), kept subtle
+  (brief: grain look kept subtle) and faded out above the 1440 px host edge. No text, no numbers.
+  Variables: level (0 brackets only | 1 | 2 stronger grain and tighter brackets), span (s).
+-->
+<html
+  lang="en"
+  data-composition-variables='[
+    {"id":"level","type":"number","label":"Level (0-2)","default":1,"min":0,"max":2},
+    {"id":"span","type":"number","label":"Host length (s)","default":2,"min":0.1}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          pointer-events: none;
+        }
+        .dz-vig {
+          position: absolute;
+          inset: 0;
+          background: radial-gradient(ellipse 72% 58% at 50% 46%, rgba(var(--stage-rgb), 0) 55%, rgba(var(--stage-rgb), 0.55) 100%);
+          -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 70%, transparent 100%);
+          mask-image: linear-gradient(to bottom, #000 0%, #000 70%, transparent 100%);
+          opacity: 0;
+        }
+        .dz-grainwrap {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 72%, transparent 100%);
+          mask-image: linear-gradient(to bottom, #000 0%, #000 72%, transparent 100%);
+          mix-blend-mode: overlay;
+          opacity: 0;
+        }
+        .dz-grain {
+          position: absolute;
+          left: -160px;
+          top: -160px;
+          width: 1400px;
+          height: 1760px;
+        }
+        .dz-scan {
+          position: absolute;
+          inset: 0;
+          background: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 0px, rgba(255, 255, 255, 0.05) 1px, rgba(0, 0, 0, 0) 1px, rgba(0, 0, 0, 0) 4px);
+          -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 70%, transparent 100%);
+          mask-image: linear-gradient(to bottom, #000 0%, #000 70%, transparent 100%);
+          opacity: 0;
+        }
+        .dz-br {
+          position: absolute;
+          width: 84px;
+          height: 84px;
+          border-color: rgba(var(--text-rgb), 0.92);
+          border-style: solid;
+          border-width: 0;
+          filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.55));
+        }
+        .dz-br.tl { border-top-width: 6px; border-left-width: 6px; border-top-left-radius: 14px; }
+        .dz-br.tr { border-top-width: 6px; border-right-width: 6px; border-top-right-radius: 14px; }
+        .dz-br.bl { border-bottom-width: 6px; border-left-width: 6px; border-bottom-left-radius: 14px; }
+        .dz-br.br { border-bottom-width: 6px; border-right-width: 6px; border-bottom-right-radius: 14px; }
+        .dz-dot {
+          position: absolute;
+          width: 16px;
+          height: 16px;
+          border-radius: 50%;
+          background: var(--accent);
+          box-shadow: 0 0 14px var(--accent);
+        }
+      </style>
+      <div id="root" data-composition-id="fx-digital-zoom" data-width="1080" data-height="1440">
+        <div class="dz-vig"></div>
+        <div class="dz-grainwrap">
+          <svg class="dz-grain" viewBox="0 0 1400 1760" xmlns="http://www.w3.org/2000/svg">
+            <filter id="dz-noise" x="0" y="0" width="100%" height="100%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="19" stitchTiles="stitch" />
+              <feColorMatrix type="saturate" values="0" />
+            </filter>
+            <rect width="1400" height="1760" filter="url(#dz-noise)" />
+          </svg>
+        </div>
+        <div class="dz-scan"></div>
+      </div>
+      <script>
+        (function () {
+          const root = document.querySelector('[data-composition-id="fx-digital-zoom"]');
+          const v = window.__hyperframes.getVariables();
+          const span = Math.max(0.1, Number(v.span) || 2);
+          const level = Math.max(0, Math.min(2, Math.round(Number(v.level) || 0)));
+          // one filter id per instance (several overlays of this scene can share the page)
+          window.__fxDzCount = (window.__fxDzCount || 0) + 1;
+          const fid = "dz-noise-" + window.__fxDzCount;
+          const filt = root.querySelector("filter");
+          if (filt) {
+            filt.setAttribute("id", fid);
+            root.querySelector(".dz-grain rect").setAttribute("filter", "url(#" + fid + ")");
+          }
+          function tokPx(name, fallback) {
+            const n = parseFloat(getComputedStyle(root).getPropertyValue(name));
+            return Number.isFinite(n) ? n : fallback;
+          }
+          const L = tokPx("--safe-left", 80);
+          const R = 1080 - tokPx("--safe-right-upper", 80);
+          const TOP = tokPx("--hook-top", 285);
+          const BOT = tokPx("--content-bottom", 1180);
+          // brackets close in by level (the frame "tightens" with each punch)
+          const inset = [0, 40, 80][level];
+          const box = { x0: L + inset, y0: TOP + inset * 0.6, x1: R - inset, y1: BOT - inset * 0.6 };
+          const corners = [
+            ["tl", box.x0, box.y0],
+            ["tr", box.x1 - 84, box.y0],
+            ["bl", box.x0, box.y1 - 84],
+            ["br", box.x1 - 84, box.y1 - 84],
+          ].map(function (c) {
+            const b = document.createElement("div");
+            b.className = "dz-br " + c[0];
+            b.style.left = c[1] + "px";
+            b.style.top = c[2] + "px";
+            root.appendChild(b);
+            return b;
+          });
+          const dot = document.createElement("i");
+          dot.className = "dz-dot";
+          dot.style.left = box.x0 + 30 + "px";
+          dot.style.top = box.y0 + 30 + "px";
+          root.appendChild(dot);
+
+          const tl = gsap.timeline({ paused: true });
+          // brackets snap in from wider (0.18 s, the fastest move allowed)
+          corners.forEach(function (b, i) {
+            const dx = i % 2 === 0 ? -40 : 40;
+            const dy = i < 2 ? -40 : 40;
+            tl.fromTo(b, { x: dx, y: dy, opacity: 0 }, { x: 0, y: 0, opacity: 1, duration: 0.18, ease: "power4.out" }, 0);
+          });
+          tl.fromTo(dot, { scale: 0.4, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.18, ease: "power4.out" }, 0.02);
+          // the accent dot blinks (idle life)
+          const blinks = Math.floor((span - 0.4) / 0.5);
+          for (let k = 0; k < blinks; k++) tl.set(dot, { opacity: k % 2 === 0 ? 0.25 : 1 }, 0.4 + k * 0.5);
+          if (level > 0) {
+            const grain = root.querySelector(".dz-grainwrap");
+            const g = root.querySelector(".dz-grain");
+            const vig = root.querySelector(".dz-vig");
+            const scan = root.querySelector(".dz-scan");
+            // The blended / masked layers are switched on and off by this timeline itself, half a frame
+            // inside the host window: early snapshots showed the grain still painting after the
+            // host was hidden (the runtime hides hosts per element; a blend-mode layer escaped it).
+            const ON = 1 / 60;
+            const OFF = Math.max(ON + 1 / 30, span - 1 / 60);
+            tl.set(grain, { opacity: level === 1 ? 0.22 : 0.32 }, ON);
+            tl.set(vig, { opacity: level === 1 ? 0.8 : 1 }, ON);
+            tl.set(scan, { opacity: 1 }, ON);
+            tl.set([grain, vig, scan], { opacity: 0 }, OFF);
+            // jitter the noise once per frame from a fixed seed (LCG): same frames every render
+            let s = 1907 + level * 31;
+            const frames = Math.ceil(span * 30);
+            for (let f = 0; f < frames; f++) {
+              s = (s * 1103515245 + 12345) % 2147483648;
+              const x = -((s >> 8) % 150);
+              s = (s * 1103515245 + 12345) % 2147483648;
+              const y = -((s >> 8) % 150);
+              tl.set(g, { x: x, y: y }, f / 30);
+            }
+          }
+          window.__timelines["fx-digital-zoom"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

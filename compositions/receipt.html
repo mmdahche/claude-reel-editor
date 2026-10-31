@@ -1,0 +1,443 @@
+<!doctype html>
+<!--
+  receipt (scene 10): terminal / commit log / bill as live mono text on the dark card. Each
+  line types in on its beat (deterministic: one tl.set per character, ~40 chars/s) with an
+  accent block caret riding the line being typed; a meta column (hash, timestamp) appears with
+  the line. One line can be the receipt: an accent band sweeps behind it, its text brightens
+  and an optional mono tag pops at its right end. "$ " at the start of a line is a prompt.
+  The font size is fitted once at setup from the longest line (a typical mono is 0.6em per
+  glyph), so nothing ever overflows the card.
+  Layout: optional kicker + heading from --hook-top; the card is centred in the
+  right-rail-safe band (x 150-930 with the default tokens) and ends above --content-bottom.
+  Variables:
+    kicker, heading ("line / line", one *serif* word), title (window title), span,
+    lines (JSON array, <= 8): "text" or {text, meta, tone: muted|win|burn|accent}
+    times (JSON array of scene-local s: when each line starts typing, never before the previous
+           line finishes; default 0.3 + 0.6 i)
+    highlight (line index, -1 = none), highlightAt (s, 0 = when that line finishes typing)
+    tag (mono pill on the highlighted line, "" = none), cps (characters per second)
+-->
+<html
+  lang="en"
+  data-composition-variables='[
+    {"id":"kicker","type":"string","label":"Kicker","default":""},
+    {"id":"heading","type":"string","label":"Heading (/ = new line, *serif*)","default":""},
+    {"id":"title","type":"string","label":"Window title","default":"git log"},
+    {"id":"lines","type":"string","label":"Lines (JSON array)","default":"[\"04:12 feat: add import\",\"04:31 fix: tax rounding\"]"},
+    {"id":"times","type":"string","label":"Times (JSON array, s)","default":"[0.3,0.9]"},
+    {"id":"highlight","type":"number","label":"Highlight line (-1 = none)","default":-1},
+    {"id":"highlightAt","type":"number","label":"Highlight at (s, 0 = auto)","default":0,"min":0},
+    {"id":"tag","type":"string","label":"Highlight tag","default":""},
+    {"id":"cps","type":"number","label":"Typing speed (chars/s)","default":40,"min":5,"max":120},
+    {"id":"span","type":"number","label":"Host length (s)","default":3,"min":0.1}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          color: var(--text);
+          font-family: var(--font-sans);
+        }
+        .rc-head {
+          position: absolute;
+          left: var(--safe-left);
+          right: var(--safe-right-upper);
+          top: var(--hook-top);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+        }
+        .rc-kicker {
+          display: block;
+          padding: 10px 22px;
+          margin-bottom: 18px;
+          border: 2px solid rgba(var(--line-rgb), 0.45);
+          border-radius: 999px;
+          font-family: var(--font-mono);
+          font-size: 23px;
+          font-weight: 700;
+          letter-spacing: 0.16em;
+          color: var(--text-soft);
+          white-space: nowrap;
+        }
+        .rc-hline {
+          display: block;
+          font-size: 82px;
+          font-weight: 850;
+          letter-spacing: -0.04em;
+          line-height: 1.02;
+        }
+        .rc-hline .serif {
+          display: inline-block;
+          font-family: var(--font-serif);
+          font-style: italic;
+          font-weight: 400;
+          font-size: calc(1em * var(--serif-scale));
+          letter-spacing: 0;
+          line-height: 0.9;
+        }
+        /* the card sits a little above centre in the space under the heading (35 / 65) */
+        .rc-zone {
+          position: absolute;
+          display: flex;
+          flex-direction: column;
+        }
+        .rc-zone::before {
+          content: "";
+          flex: 35 1 0;
+        }
+        .rc-zone::after {
+          content: "";
+          flex: 65 1 0;
+        }
+        .rc-card {
+          position: relative;
+          width: 100%;
+          flex: none;
+          border-radius: 30px;
+          background: rgba(var(--stage-rgb), 0.94);
+          border: 2px solid var(--card-border);
+          box-shadow: 0 40px 120px rgba(0, 0, 0, 0.6), 0 0 70px rgba(var(--accent-rgb), 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+          overflow: hidden;
+          opacity: 0;
+        }
+        .rc-bar {
+          position: relative;
+          display: flex;
+          align-items: center;
+          gap: 11px;
+          height: 64px;
+          padding: 0 24px;
+          background: rgba(var(--line-rgb), 0.06);
+          border-bottom: 1px solid rgba(var(--line-rgb), 0.16);
+        }
+        .rc-dot {
+          display: block;
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+        }
+        .rc-title {
+          position: absolute;
+          left: 120px;
+          right: 120px;
+          top: 0;
+          height: 64px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-family: var(--font-mono);
+          font-size: 20px;
+          font-weight: 600;
+          letter-spacing: 0.04em;
+          color: rgba(var(--text-rgb), 0.72);
+          white-space: nowrap;
+        }
+        .rc-body {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          padding: 24px 28px 30px;
+        }
+        .rc-line {
+          position: relative;
+          display: flex;
+          align-items: center;
+          padding: 8px 14px;
+          border-radius: 10px;
+          font-family: var(--font-mono);
+          font-weight: 600;
+          line-height: 1.3;
+          white-space: nowrap;
+        }
+        .rc-band {
+          position: absolute;
+          inset: 0;
+          border-radius: 10px;
+          background: linear-gradient(90deg, color-mix(in oklab, var(--accent) 30%, transparent), color-mix(in oklab, var(--accent) 10%, transparent));
+          box-shadow: inset 4px 0 0 var(--accent), 0 0 30px color-mix(in oklab, var(--accent) 22%, transparent);
+          transform-origin: 0% 50%;
+          opacity: 0;
+        }
+        .rc-meta {
+          position: relative;
+          display: block;
+          margin-right: 0.8em;
+          color: rgba(var(--line-rgb), 0.8);
+          opacity: 0;
+        }
+        .rc-prompt {
+          position: relative;
+          display: block;
+          margin-right: 0.6em;
+          color: var(--accent-text);
+          opacity: 0;
+        }
+        .rc-text {
+          position: relative;
+          display: block;
+          color: var(--text-soft);
+        }
+        .rc-text.win {
+          color: var(--win);
+        }
+        .rc-text.burn {
+          color: color-mix(in srgb, var(--burn-2) 40%, #ffffff);
+        }
+        .rc-text.accent {
+          color: var(--accent-text);
+        }
+        .rc-text.muted {
+          color: rgba(var(--text-rgb), 0.72);
+        }
+        .rc-caret {
+          position: relative;
+          display: block;
+          width: 0.56em;
+          height: 1.1em;
+          margin-left: 2px;
+          border-radius: 2px;
+          background: var(--accent);
+          opacity: 0;
+        }
+        .rc-tag {
+          position: absolute;
+          right: 12px;
+          top: 50%;
+          display: block;
+          margin-top: -19px;
+          padding: 7px 14px;
+          border-radius: 999px;
+          background: var(--accent);
+          color: var(--accent-ink);
+          font-family: var(--font-mono);
+          font-size: 20px;
+          font-weight: 800;
+          letter-spacing: 0.1em;
+          line-height: 1.2;
+          white-space: nowrap;
+          opacity: 0;
+        }
+      </style>
+      <div id="root" data-composition-id="receipt" data-width="1080" data-height="1440">
+        <div class="rc-head"></div>
+        <div class="rc-zone">
+          <div class="rc-card">
+            <div class="rc-bar">
+              <i class="rc-dot" style="background: #ff6159"></i>
+              <i class="rc-dot" style="background: #ffbd2e"></i>
+              <i class="rc-dot" style="background: #28c840"></i>
+              <span class="rc-title"></span>
+            </div>
+            <div class="rc-body"></div>
+          </div>
+        </div>
+      </div>
+      <script>
+        (function () {
+          const root = document.querySelector('[data-composition-id="receipt"]');
+          const v = window.__hyperframes.getVariables();
+          const brandTok = (n, f) => (getComputedStyle(root || document.documentElement).getPropertyValue(n).trim() || f);
+          const span = Math.max(0.1, Number(v.span) || 3);
+
+          function tokPx(name, fallback) {
+            const n = parseFloat(getComputedStyle(root).getPropertyValue(name));
+            return Number.isFinite(n) ? n : fallback;
+          }
+          const X0 = Math.max(tokPx("--safe-left", 80), tokPx("--safe-right", 150));
+          const X1 = 1080 - tokPx("--safe-right", 150);
+          const BOTTOM = tokPx("--content-bottom", 1180) - 20;
+          const HOOK = tokPx("--hook-top", 285);
+
+          function arr(s) {
+            try {
+              const x = JSON.parse(String(s || "[]"));
+              return Array.isArray(x) ? x : [];
+            } catch (err) {
+              return [];
+            }
+          }
+          function richText(el, text) {
+            String(text || "")
+              .split(/(\*[^*]+\*)/)
+              .forEach(function (part) {
+                if (!part) return;
+                if (part.length > 2 && part.charAt(0) === "*" && part.charAt(part.length - 1) === "*") {
+                  const s = document.createElement("span");
+                  s.className = "serif";
+                  s.textContent = part.slice(1, -1);
+                  el.appendChild(s);
+                } else {
+                  el.appendChild(document.createTextNode(part));
+                }
+              });
+          }
+
+          // heading
+          const head = root.querySelector(".rc-head");
+          let headBottom = 0;
+          let kicker = null;
+          if (String(v.kicker || "")) {
+            kicker = document.createElement("span");
+            kicker.className = "rc-kicker";
+            kicker.textContent = String(v.kicker);
+            head.appendChild(kicker);
+            headBottom = HOOK + 68;
+          }
+          const lineEls = String(v.heading || "")
+            .split(" / ")
+            .filter(function (s) {
+              return s.trim() !== "";
+            })
+            .slice(0, 2)
+            .map(function (txt) {
+              const el = document.createElement("span");
+              el.className = "rc-hline";
+              richText(el, txt);
+              head.appendChild(el);
+              return el;
+            });
+          if (lineEls.length) headBottom = (headBottom || HOOK) + lineEls.length * 84;
+
+          const zone = root.querySelector(".rc-zone");
+          const zTop = headBottom ? Math.max(headBottom + 50, HOOK + 160) : HOOK + 20;
+          zone.style.left = X0 + "px";
+          zone.style.width = X1 - X0 + "px";
+          zone.style.top = zTop + "px";
+          zone.style.height = BOTTOM - zTop + "px";
+          root.querySelector(".rc-title").textContent = String(v.title || "");
+
+          // normalise lines: {text, meta, tone, prompt}
+          const TONES = ["muted", "win", "burn", "accent"];
+          const lines = arr(v.lines)
+            .slice(0, 8)
+            .map(function (l) {
+              const o = l !== null && typeof l === "object" ? l : { text: String(l) };
+              let text = String(o.text || "");
+              let prompt = false;
+              if (text.indexOf("$ ") === 0) {
+                prompt = true;
+                text = text.slice(2);
+              }
+              return { text: text, meta: String(o.meta || ""), tone: TONES.indexOf(o.tone) >= 0 ? o.tone : "", prompt: prompt };
+            });
+          const times = arr(v.times);
+          const hi = Math.floor(Number(v.highlight));
+          const tagText = hi >= 0 && hi < lines.length ? String(v.tag || "") : "";
+          const cps = Math.max(5, Math.min(120, Number(v.cps) || 40));
+
+          // fit the mono size once: card inner width minus line padding, caret and the tag
+          const inner = X1 - X0 - 56 - 28 - 4;
+          const tagW = tagText ? tagText.length * 20 * 0.7 + 28 + 18 : 0;
+          let size = 28;
+          lines.forEach(function (l, i) {
+            const chars = l.text.length + 1 + (l.meta ? l.meta.length + 0.8 : 0) + (l.prompt ? 1.6 : 0);
+            const room = inner - (i === hi ? tagW : 0);
+            size = Math.min(size, Math.floor(room / Math.max(1, chars * 0.6)));
+          });
+          size = Math.max(16, size);
+
+          const body = root.querySelector(".rc-body");
+          let prevEnd = -1;
+          const rows = lines.map(function (l, i) {
+            const row = document.createElement("div");
+            row.className = "rc-line";
+            row.style.fontSize = size + "px";
+            const band = document.createElement("i");
+            band.className = "rc-band";
+            row.appendChild(band);
+            let meta = null;
+            if (l.meta) {
+              meta = document.createElement("span");
+              meta.className = "rc-meta";
+              meta.textContent = l.meta;
+              row.appendChild(meta);
+            }
+            let prompt = null;
+            if (l.prompt) {
+              prompt = document.createElement("span");
+              prompt.className = "rc-prompt";
+              prompt.textContent = "$";
+              row.appendChild(prompt);
+            }
+            const txt = document.createElement("span");
+            txt.className = "rc-text" + (l.tone ? " " + l.tone : "");
+            txt.textContent = "";
+            row.appendChild(txt);
+            const caret = document.createElement("i");
+            caret.className = "rc-caret";
+            row.appendChild(caret);
+            let tag = null;
+            if (i === hi && tagText) {
+              tag = document.createElement("span");
+              tag.className = "rc-tag";
+              tag.textContent = tagText;
+              row.appendChild(tag);
+            }
+            body.appendChild(row);
+            // a terminal types one line at a time: a line never starts before the previous one ends
+            const asked = Number.isFinite(Number(times[i])) && times[i] !== null ? Math.max(0, Number(times[i])) : 0.3 + i * 0.6;
+            const t0 = Math.max(asked, prevEnd + 0.06);
+            prevEnd = t0 + l.text.length / cps;
+            return { l: l, row: row, band: band, meta: meta, prompt: prompt, txt: txt, caret: caret, tag: tag, t0: t0, t1: t0 + l.text.length / cps };
+          });
+
+          const card = root.querySelector(".rc-card");
+          const tl = gsap.timeline({ paused: true });
+          if (kicker) tl.fromTo(kicker, { scale: 0.92, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.2, ease: "power2.out" }, 0.02);
+          lineEls.forEach(function (el, i) {
+            tl.fromTo(el, { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, 0.04 + i * 0.08);
+          });
+          tl.fromTo(card, { y: 70, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, 0.06);
+
+          // typing: meta + prompt appear with the line, text types per character, caret rides it
+          rows.forEach(function (r, i) {
+            const lead = [r.meta, r.prompt].filter(Boolean);
+            if (lead.length) tl.set(lead, { opacity: 1 }, r.t0);
+            tl.set(r.caret, { opacity: 1 }, r.t0);
+            const s = r.l.text;
+            for (let k = 1; k <= s.length; k++) tl.set(r.txt, { textContent: s.slice(0, k) }, r.t0 + k / cps);
+            const next = rows[i + 1];
+            if (next) tl.set(r.caret, { opacity: 0 }, next.t0);
+          });
+
+          // the receipt line: band sweeps, text brightens, tag pops
+          const hiRow = hi >= 0 && hi < rows.length ? rows[hi] : null;
+          let hiAt = 0;
+          if (hiRow) {
+            hiAt = Number(v.highlightAt) > 0 ? Number(v.highlightAt) : hiRow.t1 + 0.15;
+            tl.fromTo(hiRow.band, { scaleX: 0, opacity: 1 }, { scaleX: 1, opacity: 1, duration: 0.35, ease: "power3.inOut" }, hiAt);
+            tl.to(hiRow.txt, { color: brandTok("--text", "#ffffff"), duration: 0.2 }, hiAt + 0.1);
+            if (hiRow.tag) tl.fromTo(hiRow.tag, { scale: 0.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.35, ease: "back.out(2.2)" }, hiAt + 0.2);
+          }
+
+          // idle life: the last caret blinks (finite, deterministic) and the band breathes
+          if (rows.length) {
+            const lastRow = rows[rows.length - 1];
+            const blinkFrom = lastRow.t1 + 0.1;
+            const blinks = Math.floor((span - blinkFrom) / 0.5);
+            if (blinks >= 1) {
+              tl.fromTo(lastRow.caret, { opacity: 1 }, { opacity: 0, duration: 0.25, ease: "steps(1)", yoyo: true, repeat: blinks * 2 - 1, immediateRender: false }, blinkFrom);
+            }
+          }
+          if (hiRow) {
+            const settle = hiAt + 0.6;
+            const reps = Math.floor((span - settle) / 0.9) - 1;
+            if (reps >= 0) {
+              tl.fromTo(hiRow.band, { opacity: 1 }, { opacity: 0.7, duration: 0.9, ease: "sine.inOut", yoyo: true, repeat: reps, immediateRender: false }, settle);
+            }
+          }
+          window.__timelines["receipt"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

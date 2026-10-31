@@ -1,0 +1,120 @@
+<!doctype html>
+<!--
+  stamp (scene 11, overlay): red stamp slams over whatever is on the panel
+  (scale 1.9 -> 1, rotation -10 -> -4, back.out(2), 0.38s), optional "$" floating up.
+  Pair it with the table's dimAt/shakeAt for the hit.
+  Mounted by the build as an overlay host on top of the panel (1080 x 1440).
+  Stamp centre sits at y 1030, inside x 150-930 (right rail safe).
+  Variables: kicker, line, cash (boolean), centerY (px, keep the row the stamp is about visible), span.
+-->
+<html
+  lang="en"
+  data-composition-variables='[
+    {"id":"kicker","type":"string","label":"Kicker","default":"PICK WRONG"},
+    {"id":"line","type":"string","label":"Line","default":"Pay every month"},
+    {"id":"cash","type":"boolean","label":"Floating cash","default":false},
+    {"id":"centerY","type":"number","label":"Stamp centre y (px)","default":1030,"min":400,"max":1100},
+    {"id":"span","type":"number","label":"Host length (s)","default":2,"min":0.1}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          font-family: var(--font-sans);
+        }
+        .sp-box {
+          position: absolute;
+          left: 150px;
+          width: 780px;
+          top: 920px;
+          height: 220px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .sp-stamp {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          max-width: 740px;
+          padding: 22px 44px 26px;
+          border-radius: 28px;
+          background: linear-gradient(135deg, var(--burn-1), var(--burn-2));
+          box-shadow: 0 24px 70px rgba(var(--burn-rgb), 0.55);
+          opacity: 0;
+        }
+        .sp-k {
+          display: block;
+          font-family: var(--font-mono);
+          font-size: 28px;
+          font-weight: 800;
+          letter-spacing: 0.16em;
+          color: rgba(255, 255, 255, 0.92);
+          white-space: nowrap;
+        }
+        .sp-l {
+          display: block;
+          font-size: 60px;
+          font-weight: 900;
+          letter-spacing: -0.03em;
+          color: #ffffff;
+          white-space: nowrap;
+        }
+        .sp-cash {
+          position: absolute;
+          top: 1000px;
+          display: block;
+          font-size: 64px;
+          font-weight: 900;
+          color: var(--win);
+          text-shadow: 0 0 24px rgba(var(--win-rgb), 0.6);
+          opacity: 0;
+        }
+      </style>
+      <div id="root" data-composition-id="stamp" data-width="1080" data-height="1440">
+        <div class="sp-box">
+          <div class="sp-stamp" data-layout-allow-occlusion><span class="sp-k" data-layout-allow-overlap></span><span class="sp-l" data-layout-allow-overlap></span></div>
+        </div>
+      </div>
+      <script>
+        (function () {
+          const root = document.querySelector('[data-composition-id="stamp"]');
+          const v = window.__hyperframes.getVariables();
+          const span = Math.max(0.1, Number(v.span) || 2);
+          root.querySelector(".sp-k").textContent = String(v.kicker || "");
+          root.querySelector(".sp-l").textContent = String(v.line || "");
+          const stamp = root.querySelector(".sp-stamp");
+          const cy = Math.max(400, Math.min(1100, Number(v.centerY) || 1030));
+          root.querySelector(".sp-box").style.top = cy - 110 + "px";
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(stamp, { scale: 1.9, rotation: -10, opacity: 0 }, { scale: 1, rotation: -4, opacity: 1, duration: 0.38, ease: "back.out(2)" }, 0);
+          if (v.cash === true || v.cash === "true") {
+            const xs = [250, 380, 520, 660, 790];
+            const drift = [-30, 20, -10, 25, -20];
+            xs.forEach(function (x, i) {
+              const c = document.createElement("span");
+              c.className = "sp-cash";
+              c.setAttribute("data-layout-allow-overlap", "");
+              c.textContent = "$";
+              c.style.left = x + "px";
+              c.style.top = cy - 30 + "px";
+              root.appendChild(c);
+              const st = 0.3 + i * 0.12;
+              const life = Math.min(1.4, Math.max(0.6, span - st - 0.05));
+              tl.fromTo(c, { y: 0, x: 0 }, { y: -320, x: drift[i], duration: life, ease: "power1.out" }, st);
+              tl.fromTo(c, { opacity: 0 }, { keyframes: [{ opacity: 1, duration: 0.2 }, { opacity: 1, duration: life * 0.5 }, { opacity: 0, duration: life * 0.3 }] }, st);
+            });
+          }
+          window.__timelines["stamp"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

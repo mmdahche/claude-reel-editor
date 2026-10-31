@@ -1,0 +1,82 @@
+<!doctype html>
+<!--
+  stage-bg: the stage background. Top-centre glow, breathing haze, perspective floor grid
+  drifting toward the viewer (360px per 11s). Fills its host; the build
+  mounts it full-canvas for the whole video, under every other layer.
+  Variables: span (seconds the host lasts; sizes the drift and the breathing loop).
+-->
+<html
+  lang="en"
+  data-composition-variables='[{"id":"span","type":"number","label":"Host length (s)","default":30,"min":0.1}]'
+>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        /* NOTE: never put a background on #root in a sub-composition: every scene root on the
+           assembled page shares the id, so a #root background would paint over lower layers. */
+        #root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+        }
+        .sb-bg {
+          position: absolute;
+          inset: 0;
+          background: radial-gradient(120% 52% at 50% 14%, var(--stage-glow-1) 0%, var(--stage-glow-2) 38%, var(--stage) 75%);
+        }
+        .sb-haze {
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 0;
+          height: 1240px;
+          background: radial-gradient(50% 50% at 50% 36%, var(--stage-haze), rgba(var(--line-rgb), 0) 70%);
+        }
+        .sb-floor-wrap {
+          position: absolute;
+          left: -500px;
+          right: -500px;
+          top: 860px;
+          height: 1900px;
+          perspective: 700px;
+          perspective-origin: 50% 0%;
+        }
+        .sb-floor {
+          position: absolute;
+          inset: 0;
+          transform: rotateX(62deg);
+          transform-origin: 50% 0%;
+          background-image:
+            linear-gradient(var(--grid) 2px, transparent 2px),
+            linear-gradient(90deg, var(--grid) 2px, transparent 2px);
+          background-size: 120px 120px;
+          -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 22%, #000 100%);
+          mask-image: linear-gradient(to bottom, transparent 0%, #000 22%, #000 100%);
+        }
+      </style>
+      <div id="root" data-composition-id="stage-bg" data-width="1080" data-height="1920">
+        <div class="sb-bg" data-layout-ignore></div>
+        <div class="sb-haze" data-layout-ignore></div>
+        <div class="sb-floor-wrap" data-layout-ignore><div class="sb-floor"></div></div>
+      </div>
+      <script>
+        (function () {
+          const root = document.querySelector('[data-composition-id="stage-bg"]');
+          const vars = window.__hyperframes.getVariables();
+          const span = Math.max(0.1, Number(vars.span) || 30);
+          const floor = root.querySelector(".sb-floor");
+          const haze = root.querySelector(".sb-haze");
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(floor, { backgroundPositionY: "0px" }, { backgroundPositionY: (360 * span) / 11 + "px", duration: span, ease: "none" }, 0);
+          const breath = 2.5;
+          const repeats = Math.max(0, Math.floor(span / breath) - 1);
+          tl.fromTo(haze, { opacity: 0.6 }, { opacity: 1, duration: breath, ease: "sine.inOut", yoyo: true, repeat: repeats }, 0);
+          window.__timelines["stage-bg"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

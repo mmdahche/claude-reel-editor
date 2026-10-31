@@ -1,0 +1,111 @@
+<!doctype html>
+<!--
+  chapter (scene 9): mono pill row "01 FIRST / 02 SECOND / 03 THIRD"; the active pill fills
+  with --pill-bg, gets an accent border and pops; optional full-panel colour wipe (left -> right, 0.5s)
+  in the tool's colour before the pills land. 0.6-1.2s. Pills sit at y ~300 (safe zone).
+  Variables: chapters (JSON array of strings), active (index), color (CSS for the wipe),
+             wipe (boolean), span.
+-->
+<html
+  lang="en"
+  data-composition-variables='[
+    {"id":"chapters","type":"string","label":"Chapters (JSON array)","default":"[\"01 FIRST\",\"02 SECOND\",\"03 THIRD\"]"},
+    {"id":"active","type":"number","label":"Active index","default":0,"min":0},
+    {"id":"color","type":"string","label":"Wipe colour","default":""},
+    {"id":"wipe","type":"boolean","label":"Colour wipe","default":false},
+    {"id":"span","type":"number","label":"Host length (s)","default":1,"min":0.1}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          font-family: var(--font-sans);
+        }
+        .ch-wipe {
+          position: absolute;
+          inset: 0;
+          transform-origin: 0% 50%;
+          opacity: 0;
+        }
+        .ch-row {
+          position: absolute;
+          left: var(--safe-left);
+          right: var(--safe-right-upper);
+          top: calc(var(--hook-top) + 10px);
+          display: flex;
+          justify-content: center;
+          gap: 14px;
+        }
+        .ch-pill {
+          display: block;
+          padding: 12px 20px;
+          border-radius: 999px;
+          border: 2px solid rgba(var(--line-rgb), 0.35);
+          background: rgba(var(--stage-rgb), 0.6);
+          font-family: var(--font-mono);
+          font-size: 23px;
+          font-weight: 700;
+          letter-spacing: 0.14em;
+          color: rgba(var(--text-rgb), 0.75);
+          white-space: nowrap;
+          opacity: 0;
+        }
+        .ch-pill.on {
+          background: var(--pill-bg);
+          border-color: var(--accent);
+          color: #ffffff;
+          box-shadow: 0 0 26px color-mix(in oklab, var(--accent) 40%, transparent);
+        }
+      </style>
+      <div id="root" data-composition-id="chapter" data-width="1080" data-height="1440">
+        <div class="ch-wipe"></div>
+        <div class="ch-row"></div>
+      </div>
+      <script>
+        (function () {
+          const root = document.querySelector('[data-composition-id="chapter"]');
+          const v = window.__hyperframes.getVariables();
+          const brandTok = (n, f) => (getComputedStyle(root || document.documentElement).getPropertyValue(n).trim() || f);
+          let chapters = [];
+          try {
+            chapters = JSON.parse(String(v.chapters || "[]"));
+          } catch (err) {
+            chapters = [];
+          }
+          if (!Array.isArray(chapters)) chapters = [];
+          const active = Math.max(0, Math.floor(Number(v.active) || 0));
+          const row = root.querySelector(".ch-row");
+          const pills = chapters.slice(0, 4).map(function (c, i) {
+            const p = document.createElement("span");
+            p.className = "ch-pill" + (i === active ? " on" : "");
+            p.textContent = String(c);
+            row.appendChild(p);
+            return p;
+          });
+          const tl = gsap.timeline({ paused: true });
+          let t0 = 0.02;
+          if (v.wipe === true || v.wipe === "true") {
+            const wipe = root.querySelector(".ch-wipe");
+            wipe.style.background = String(v.color || brandTok("--accent", "#888888"));
+            tl.fromTo(wipe, { scaleX: 0, opacity: 1 }, { scaleX: 1, opacity: 1, duration: 0.25, ease: "power3.in" }, 0);
+            tl.to(wipe, { opacity: 0, duration: 0.25, ease: "power2.out" }, 0.25);
+            t0 = 0.3;
+          }
+          if (pills.length) {
+            tl.fromTo(pills, { scale: 0.92, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.07, stagger: 0.05, ease: "power2.out" }, t0);
+            const on = pills[Math.min(active, pills.length - 1)];
+            tl.fromTo(on, { scale: 1 }, { scale: 1.08, duration: 0.18, ease: "power3.out", yoyo: true, repeat: 1 }, t0 + 0.25);
+          }
+          window.__timelines["chapter"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

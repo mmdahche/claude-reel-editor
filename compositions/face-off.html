@@ -1,0 +1,457 @@
+<!doctype html>
+<!--
+  face-off (scene 3): two items squared off, a lane each, "VS" in the serif italic on a
+  seal between them. Each lane tilts in from its side (registry split-tilt-cards idea), then
+  its tile drops onto the lane with the line-up's beam flash and glowing pad in the item's
+  colour, then the name and a mono job pill. The seal slams in like a stamp. Optional verdict:
+  at pickAt the picked lane lights up in the accent with a mono pill and the other lane's
+  tile steps back (its text keeps full contrast). Optional 3-way: three lanes, two seals.
+  Layout: heading from --hook-top inside --safe-left / --safe-right-upper; lanes inside the
+  symmetric right-rail-safe band (x 150-930 with the default tokens), bottom above
+  --content-bottom so nothing touches the caption band.
+  Variables:
+    kicker, heading ("line / line", one *serif* word), span,
+    items (JSON): [{name, img, job, color, jobInk, t, fit: cover|contain, pad (0-0.3),
+                    tile: dark|light|none, aspect}]   2-3 items; t = scene-local drop time (s)
+    left, right, leftJob, rightJob   shorthand when items is empty (lanes without logo tiles)
+    versus (seal text), vsAt (s, 0 = just after the last tile lands)
+    tileAspect (tile width / height when an item has no aspect)
+    pick (index, -1 = none), pickAt (s), pickLabel
+  Logo rule: marks are never recoloured or glowed; the colour lives on the
+  lane bar, beam, pad and job pill only.
+-->
+<html
+  lang="en"
+  data-composition-variables='[
+    {"id":"kicker","type":"string","label":"Kicker","default":""},
+    {"id":"heading","type":"string","label":"Heading (/ = new line, *serif*)","default":""},
+    {"id":"items","type":"string","label":"Items (JSON)","default":"[]"},
+    {"id":"left","type":"string","label":"Left (no items)","default":"Option A"},
+    {"id":"right","type":"string","label":"Right (no items)","default":"Option B"},
+    {"id":"leftJob","type":"string","label":"Left job (no items)","default":"OPTION A JOB"},
+    {"id":"rightJob","type":"string","label":"Right job (no items)","default":"OPTION B JOB"},
+    {"id":"versus","type":"string","label":"Seal text","default":"VS"},
+    {"id":"vsAt","type":"number","label":"Seal lands (s, 0 = auto)","default":0,"min":0},
+    {"id":"tileAspect","type":"number","label":"Tile aspect (w/h)","default":1,"min":0.4,"max":2.5},
+    {"id":"pick","type":"number","label":"Picked lane (-1 = none)","default":-1},
+    {"id":"pickAt","type":"number","label":"Pick at (s)","default":0,"min":0},
+    {"id":"pickLabel","type":"string","label":"Pick label","default":"MY PICK"},
+    {"id":"span","type":"number","label":"Host length (s)","default":3,"min":0.1}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          color: var(--text);
+          font-family: var(--font-sans);
+        }
+        .fo-head {
+          position: absolute;
+          left: var(--safe-left);
+          right: var(--safe-right-upper);
+          top: var(--hook-top);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+        }
+        .fo-kicker {
+          display: block;
+          padding: 10px 22px;
+          margin-bottom: 18px;
+          border: 2px solid rgba(var(--line-rgb), 0.45);
+          border-radius: 999px;
+          font-family: var(--font-mono);
+          font-size: 23px;
+          font-weight: 700;
+          letter-spacing: 0.16em;
+          color: var(--text-soft);
+          white-space: nowrap;
+        }
+        .fo-line {
+          display: block;
+          font-size: 82px;
+          font-weight: 850;
+          letter-spacing: -0.04em;
+          line-height: 1.02;
+        }
+        .fo-line .serif {
+          display: inline-block;
+          font-family: var(--font-serif);
+          font-style: italic;
+          font-weight: 400;
+          font-size: calc(1em * var(--serif-scale));
+          letter-spacing: 0;
+          line-height: 0.9;
+        }
+        .fo-col {
+          position: absolute;
+          transform-origin: 50% 100%;
+          opacity: 0;
+        }
+        .fo-lane {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          border-radius: var(--card-radius);
+          background: var(--card-bg);
+          border: 2px solid var(--card-border);
+          box-shadow: 0 40px 110px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        }
+        .fo-glow {
+          position: absolute;
+          inset: 0;
+          opacity: 0.16;
+          -webkit-mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0) 72%);
+          mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0) 72%);
+        }
+        .fo-bar {
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 0;
+          height: 8px;
+          transform-origin: 0% 50%;
+        }
+        .fo-ring {
+          position: absolute;
+          inset: -2px;
+          border-radius: var(--card-radius);
+          border: 3px solid var(--accent);
+          box-shadow: 0 0 46px color-mix(in oklab, var(--accent) 45%, transparent), inset 0 0 40px color-mix(in oklab, var(--accent) 16%, transparent);
+          opacity: 0;
+        }
+        .fo-beam {
+          position: absolute;
+          top: 8px;
+          clip-path: polygon(38% 0, 62% 0, 100% 100%, 0 100%);
+          background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(var(--line-rgb), 0.3));
+          opacity: 0;
+        }
+        .fo-pad {
+          position: absolute;
+          height: 56px;
+          border-radius: 50%;
+          filter: blur(6px);
+          opacity: 0;
+        }
+        .fo-tile {
+          position: absolute;
+          border-radius: 28px;
+          overflow: hidden;
+          opacity: 0;
+        }
+        .fo-tile.dark {
+          background: #020409;
+          border: 2px solid rgba(255, 255, 255, 0.14);
+          box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+        }
+        .fo-tile.light {
+          background: var(--plate);
+          border: 1px solid rgba(0, 0, 0, 0.08);
+          box-shadow: var(--plate-shadow);
+        }
+        .fo-img {
+          display: block;
+          width: 100%;
+          height: 100%;
+        }
+        .fo-label {
+          position: absolute;
+          left: 0;
+          right: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 14px;
+        }
+        .fo-name {
+          display: block;
+          font-weight: 800;
+          letter-spacing: -0.03em;
+          line-height: 1.05;
+          white-space: nowrap;
+          opacity: 0;
+        }
+        .fo-job {
+          display: block;
+          padding: 9px 16px;
+          border-radius: 999px;
+          font-family: var(--font-mono);
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          white-space: nowrap;
+          opacity: 0;
+        }
+        .fo-chipbox {
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: -24px;
+          display: flex;
+          justify-content: center;
+        }
+        .fo-chip {
+          display: block;
+          padding: 9px 18px;
+          border-radius: 999px;
+          background: var(--accent);
+          color: var(--accent-ink);
+          font-family: var(--font-mono);
+          font-size: 20px;
+          font-weight: 800;
+          letter-spacing: 0.12em;
+          white-space: nowrap;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+          opacity: 0;
+        }
+        .fo-seal {
+          position: absolute;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 50%;
+          background: radial-gradient(circle at 50% 35%, var(--stage-glow-2) 0%, var(--stage) 75%);
+          border: 2px solid color-mix(in oklab, var(--accent) 75%, transparent);
+          box-shadow: 0 0 44px color-mix(in oklab, var(--accent) 38%, transparent), 0 18px 50px rgba(0, 0, 0, 0.55);
+          opacity: 0;
+        }
+        .fo-seal-ring {
+          position: absolute;
+          inset: -2px;
+          border-radius: 50%;
+          border: 3px solid var(--accent);
+          opacity: 0;
+        }
+        .fo-vs {
+          display: block;
+          font-family: var(--font-serif);
+          font-style: italic;
+          font-weight: 400;
+          letter-spacing: 0;
+          line-height: 1;
+          color: var(--accent-text);
+          text-shadow: 0 0 26px color-mix(in oklab, var(--accent) 45%, transparent);
+          white-space: nowrap;
+          transform: translateY(-0.04em);
+        }
+      </style>
+      <div id="root" data-composition-id="face-off" data-width="1080" data-height="1440">
+        <div class="fo-head"></div>
+        <div class="fo-stage"></div>
+      </div>
+      <script>
+        (function () {
+          const root = document.querySelector('[data-composition-id="face-off"]');
+          const v = window.__hyperframes.getVariables();
+          const brandTok = (n, f) => (getComputedStyle(root || document.documentElement).getPropertyValue(n).trim() || f);
+          const span = Math.max(0.1, Number(v.span) || 3);
+
+          // safe-zone tokens (px), read once at setup so a token change moves the layout
+          function tokPx(name, fallback) {
+            const n = parseFloat(getComputedStyle(root).getPropertyValue(name));
+            return Number.isFinite(n) ? n : fallback;
+          }
+          const X0 = Math.max(tokPx("--safe-left", 80), tokPx("--safe-right", 150));
+          const W = 1080 - tokPx("--safe-right", 150) - X0;
+          const BOTTOM = tokPx("--content-bottom", 1180) - 20;
+          const HOOK = tokPx("--hook-top", 285);
+
+          // element helper: tag.class, appended to parent, inline styles from css
+          function el(tag, cls, parent, css) {
+            const e = document.createElement(tag);
+            e.className = cls;
+            if (css) Object.assign(e.style, css);
+            if (parent) parent.appendChild(e);
+            return e;
+          }
+          function parse(s) {
+            try {
+              const x = JSON.parse(String(s || "[]"));
+              return Array.isArray(x) ? x : [];
+            } catch (err) {
+              return [];
+            }
+          }
+          // "*word*" -> serif italic span (textContent only)
+          function richText(e, text) {
+            String(text || "")
+              .split(/(\*[^*]+\*)/)
+              .forEach(function (part) {
+                if (!part) return;
+                if (part.length > 2 && part.charAt(0) === "*" && part.charAt(part.length - 1) === "*") el("span", "serif", e).textContent = part.slice(1, -1);
+                else e.appendChild(document.createTextNode(part));
+              });
+          }
+
+          // items, or the left/right shorthand
+          let items = parse(v.items).slice(0, 3);
+          if (items.length < 2) {
+            items = [
+              { name: v.left, job: v.leftJob, color: "var(--accent)", t: 0.15 },
+              { name: v.right, job: v.rightJob, color: "var(--muted)", t: 0.4 },
+            ];
+          }
+          const n = items.length;
+
+          // heading
+          const head = root.querySelector(".fo-head");
+          let headBottom = 0;
+          let kicker = null;
+          if (String(v.kicker || "")) {
+            kicker = el("span", "fo-kicker", head);
+            kicker.textContent = String(v.kicker);
+            headBottom = HOOK + 68;
+          }
+          const lines = String(v.heading || "").split(" / ").filter((s) => s.trim() !== "").slice(0, 2);
+          const lineEls = lines.map(function (txt) {
+            const e = el("span", "fo-line", head);
+            richText(e, txt);
+            return e;
+          });
+          if (lineEls.length) headBottom = (headBottom || HOOK) + lineEls.length * 84;
+
+          // lane geometry: equal lanes with a gutter for the seal; tiles share one floor
+          const gut = n === 3 ? 58 : 96;
+          const laneW = (W - gut * (n - 1)) / n;
+          const baseAspect = Math.max(0.4, Math.min(2.5, Number(v.tileAspect) || 1));
+          const tileMaxW = Math.min(n === 3 ? 172 : 262, laneW - 56);
+          const tileMaxH = n === 3 ? 172 : 250;
+          const tiles = items.map(function (it) {
+            if (String(it.img || "") === "") return { w: 0, h: 0, img: false };
+            const a = Math.max(0.4, Math.min(2.5, Number(it.aspect) || baseAspect));
+            const h = Math.min(tileMaxH, Math.round(tileMaxW / a));
+            return { w: Math.round(Math.min(tileMaxW, h * a)), h: h, img: true };
+          });
+          const floorH = Math.max(0, ...tiles.map((t) => t.h));
+          const nameSize = n === 3 ? 40 : 54;
+          const TILE_TOP = 78;
+          const floorY = floorH > 0 ? TILE_TOP + floorH : 96;
+          const labelTop = floorY + (floorH > 0 ? 50 : 0);
+          const regionTop = headBottom ? Math.max(headBottom + 64, HOOK + 160) : HOOK + 40;
+          const regionH = BOTTOM - regionTop;
+          const laneH = Math.min(regionH, labelTop + nameSize * 1.05 + 14 + 44 + 52);
+          const laneTop = Math.round(regionTop + Math.max(0, (regionH - laneH) * 0.4));
+
+          const stage = root.querySelector(".fo-stage");
+          const cols = items.map(function (it, i) {
+            const x = X0 + i * (laneW + gut);
+            const color = String(it.color || "var(--accent)");
+            const col = el("div", "fo-col", stage, { left: x + "px", top: laneTop + "px", width: laneW + "px", height: laneH + "px" });
+            const lane = el("div", "fo-lane", col);
+            el("div", "fo-glow", lane, { background: color });
+            const bar = el("div", "fo-bar", lane, { background: color });
+            const ring = el("div", "fo-ring", col);
+            const t = tiles[i];
+            let beam = null;
+            let pad = null;
+            let tile = null;
+            if (t.img) {
+              const padW = Math.min(laneW - 40, t.w + 40);
+              beam = el("div", "fo-beam", col, { left: laneW * 0.08 + "px", width: laneW * 0.84 + "px", height: floorY + 12 + "px" });
+              pad = el("div", "fo-pad", col, { background: color, width: padW + "px", left: (laneW - padW) / 2 + "px", top: floorY - 18 + "px" });
+              const kind = it.tile === "light" || it.tile === "none" ? it.tile : "dark";
+              tile = el("div", "fo-tile " + kind, col, { width: t.w + "px", height: t.h + "px", left: (laneW - t.w) / 2 + "px", top: floorY - t.h + "px" });
+              const img = el("img", "fo-img", tile, { objectFit: it.fit === "cover" ? "cover" : "contain" });
+              img.setAttribute("src", String(it.img));
+              img.setAttribute("alt", "");
+              const padPct = Number.isFinite(Number(it.pad)) ? Math.max(0, Math.min(0.3, Number(it.pad))) : 0.12;
+              if (it.fit !== "cover") img.style.padding = kind === "none" ? "0" : Math.round(padPct * 100) + "%";
+            }
+            const label = el("div", "fo-label", col, { top: labelTop + "px" });
+            const nameText = String(it.name || "");
+            const name = el("span", "fo-name", label, { fontSize: Math.max(28, Math.min(nameSize, Math.floor((laneW - 32) / Math.max(1, nameText.length * 0.6)))) + "px" });
+            name.textContent = nameText;
+            const jobText = String(it.job || "");
+            const job = el("span", "fo-job", label, { fontSize: Math.max(15, Math.min(20, Math.floor((laneW - 44) / Math.max(1, jobText.length * 0.68)))) + "px", background: color, color: String(it.jobInk || brandTok("--plate-ink", "#111111")) });
+            job.textContent = jobText;
+            if (!jobText) job.style.display = "none";
+            const chip = el("span", "fo-chip", el("div", "fo-chipbox", col));
+            chip.textContent = String(v.pickLabel || "");
+            const tDrop = Number.isFinite(Number(it.t)) ? Math.max(0, Number(it.t)) : 0.15 + i * 0.3;
+            return { col: col, bar: bar, ring: ring, beam: beam, pad: pad, tile: tile, name: name, job: job, chip: chip, t: tDrop };
+          });
+
+          // seals between neighbouring lanes, centred on the tile row
+          const sealD = n === 3 ? 104 : 150;
+          const sealCY = laneTop + (floorH > 0 ? TILE_TOP + floorH / 2 : laneH / 2);
+          const seals = [];
+          for (let i = 0; i < n - 1; i++) {
+            const cx = X0 + (i + 1) * laneW + i * gut + gut / 2;
+            const seal = el("div", "fo-seal", stage, { left: cx - sealD / 2 + "px", top: sealCY - sealD / 2 + "px", width: sealD + "px", height: sealD + "px" });
+            seal.setAttribute("data-layout-allow-overlap", "");
+            const ring = el("i", "fo-seal-ring", seal);
+            const vs = el("span", "fo-vs", seal, { fontSize: Math.round(sealD * 0.56) + "px" });
+            vs.setAttribute("data-layout-allow-overlap", "");
+            vs.textContent = String(v.versus || "VS");
+            seals.push({ seal: seal, ring: ring });
+          }
+
+          const tl = gsap.timeline({ paused: true });
+          if (kicker) tl.fromTo(kicker, { scale: 0.92, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.2, ease: "power2.out" }, 0.02);
+          lineEls.forEach(function (e, i) {
+            tl.fromTo(e, { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, 0.08 + i * 0.08);
+          });
+
+          // lanes tilt in from their own side, then the tile drops onto the lane floor
+          cols.forEach(function (c, i) {
+            const side = n === 3 && i === 1 ? 0 : i < n / 2 ? -1 : 1;
+            const enter = Math.max(0, c.t - 0.18);
+            tl.fromTo(c.col, { x: side * 70, y: side === 0 ? 60 : 0, rotation: side * 5, opacity: 0 }, { x: 0, y: 0, rotation: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, enter);
+            tl.fromTo(c.bar, { scaleX: 0 }, { scaleX: 1, duration: 0.45, ease: "power3.inOut" }, enter + 0.12);
+            if (c.tile) {
+              tl.fromTo(c.beam, { opacity: 0 }, { opacity: 1, duration: 0.25, ease: "power2.out" }, c.t);
+              tl.to(c.beam, { opacity: 0.45, duration: 0.8, ease: "power2.inOut" }, c.t + 0.6);
+              tl.fromTo(c.pad, { opacity: 0, scale: 0.4 }, { opacity: 0.85, scale: 1, duration: 0.5, ease: "back.out(2)" }, c.t + 0.05);
+              tl.fromTo(c.tile, { y: -140, opacity: 0, scale: 0.7 }, { y: 0, opacity: 1, scale: 1, duration: 0.6, ease: "back.out(1.6)" }, c.t);
+            }
+            tl.fromTo(c.name, { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power3.out" }, c.t + 0.25);
+            tl.fromTo(c.job, { scale: 0.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.4, ease: "back.out(2.2)" }, c.t + 0.4);
+          });
+
+          // the seal slams like a stamp (scale 1.8 -> 1, rotation -12 -> -6) with a ring flash
+          const lastT = Math.max(...cols.map((c) => c.t));
+          const vsAt = Number(v.vsAt) > 0 ? Number(v.vsAt) : lastT + 0.45;
+          seals.forEach(function (s, i) {
+            const at = vsAt + i * 0.12;
+            tl.fromTo(s.seal, { scale: 1.8, rotation: -12, opacity: 0 }, { scale: 1, rotation: -6, opacity: 1, duration: 0.32, ease: "back.out(2)" }, at);
+            tl.fromTo(s.ring, { scale: 1, opacity: 0.9 }, { scale: 1.7, opacity: 0, duration: 0.45, ease: "power2.out" }, at + 0.08);
+          });
+
+          // optional verdict: the picked lane lights up; the others step back (text keeps contrast)
+          const pick = Math.floor(Number(v.pick));
+          const pickAt = Math.max(0, Number(v.pickAt) || 0);
+          const hasPick = pick >= 0 && pick < n && pickAt > 0 && String(v.pickLabel || "") !== "";
+          if (hasPick) {
+            cols.forEach(function (c, i) {
+              if (i === pick) {
+                tl.fromTo(c.ring, { opacity: 0 }, { opacity: 1, duration: 0.25, ease: "power2.out" }, pickAt);
+                tl.to(c.col, { scale: 1.03, duration: 0.3, ease: "back.out(2)" }, pickAt);
+                tl.fromTo(c.chip, { scale: 0.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.35, ease: "back.out(2.2)" }, pickAt + 0.08);
+              } else {
+                tl.to([c.tile, c.beam, c.pad, c.bar].filter(Boolean), { opacity: 0.3, duration: 0.3, ease: "power2.out" }, pickAt);
+                tl.to(c.name, { color: brandTok("--muted", "#aaaaaa"), duration: 0.3 }, pickAt);
+              }
+            });
+          }
+
+          // idle life: the picked (or first) tile floats
+          const floater = cols[hasPick ? pick : 0].tile;
+          const settle = Math.max(lastT + 0.8, hasPick ? pickAt + 0.4 : 0);
+          const reps = Math.floor((span - settle) / 0.9) - 1;
+          if (floater && reps >= 0) {
+            tl.fromTo(floater, { y: 0 }, { y: -14, duration: 0.9, ease: "sine.inOut", yoyo: true, repeat: reps, immediateRender: false }, settle);
+          }
+          window.__timelines["face-off"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

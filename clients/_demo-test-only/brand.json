@@ -1,0 +1,77 @@
+{
+  "name": "_demo-test-only",
+  "_about": "TEST ONLY. Flat greys so the synthetic demo can build and pass the check. This is not a design and not a starting look: never copy it for a client. Run DESIGN-INTERVIEW.md instead.",
+  "tokens": {
+    "--stage": "#1c1c1c",
+    "--stage-glow-1": "#3a3a3a",
+    "--stage-glow-2": "#262626",
+    "--stage-haze": "rgba(200, 200, 200, 0.12)",
+    "--grid": "rgba(200, 200, 200, 0.25)",
+    "--glow": "rgba(255, 255, 255, 0.25)",
+    "--line": "#9a9a9a",
+    "--pill-bg": "#333333",
+    "--accent": "#bdbdbd",
+    "--accent-ink": "#111111",
+    "--accent-text": "#dddddd",
+    "--text": "#f2f2f2",
+    "--text-soft": "#d0d0d0",
+    "--muted": "rgba(242, 242, 242, 0.72)",
+    "--win": "#d4d4d4",
+    "--burn-1": "#8a8a8a",
+    "--burn-2": "#a8a8a8",
+    "--card-bg": "rgba(40, 40, 40, 0.85)",
+    "--card-border": "rgba(200, 200, 200, 0.3)",
+    "--card-radius": "24px",
+    "--plate": "#ececec",
+    "--plate-2": "#dcdcdc",
+    "--plate-ink": "#141414",
+    "--plate-muted": "#555555",
+    "--plate-radius": "28px",
+    "--plate-shadow": "0 20px 60px rgba(0, 0, 0, 0.45)",
+    "--title-size": "88px",
+    "--serif-scale": "1.1",
+    "--caption-style": "bigword",
+    "--caption-max-words": "3",
+    "--caption-size": "32px",
+    "--caption-weight": "600",
+    "--caption-tracking": "0.1em",
+    "--caption-fg": "#ffffff",
+    "--caption-bg": "rgba(20, 20, 20, 0.85)",
+    "--caption-radius": "8px",
+    "--caption-pad": "10px 18px",
+    "--bigword-size": "104px",
+    "--bigword-fg": "#ffffff",
+    "--bigword-shadow": "0 6px 0 rgba(0, 0, 0, 0.55), 0 0 30px rgba(0, 0, 0, 0.5)",
+    "--face-radius": "32px",
+    "--face-hairline": "2px solid rgba(255, 255, 255, 0.4)",
+    "--face-glow": "0 20px 60px rgba(0, 0, 0, 0.45)",
+    "--pip-ring": "4px solid rgba(255, 255, 255, 0.9)",
+    "--proof-split": "on",
+    "--grade-intensity": "0"
+  },
+  "fonts": {
+    "sans": {
+      "family": "",
+      "fallback": "sans-serif",
+      "system": true
+    },
+    "mono": {
+      "family": "",
+      "fallback": "monospace",
+      "system": true
+    },
+    "serif": {
+      "family": "",
+      "fallback": "serif",
+      "system": true
+    }
+  },
+  "cta": {
+    "dmName": "testclient",
+    "footerText": "INSTALL TEST"
+  },
+  "audio": {
+    "sfx": true,
+    "voiceEq": true
+  }
+}

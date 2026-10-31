@@ -1,0 +1,273 @@
+<!doctype html>
+<!--
+  ROOT SHELL. scripts/build.mjs fills this in from shotlist.json + transcript.json + the active
+  client's clients/<name>/brand.json and writes ../index.html. Do not render this file directly,
+  and never hand-edit the generated index.html.
+
+  This kit ships NO look. Every colour, font, size and radius below is REQUIRED: the value comes
+  from the client's brand.json "tokens" (written by DESIGN-INTERVIEW.md). The build stops and
+  lists every token that is still REQUIRED. Only the platform geometry (safe zones, caption line,
+  PiP position) has values here, because it comes from the apps, not from a brand.
+
+  Colour tokens marked (hex) must be #rrggbb: the build derives an "-rgb" twin from them
+  (for example --stage-rgb: 17, 17, 17) that the scenes use for see-through tints.
+
+  Four tokens are "structural": the build reads them to decide layout:
+    --caption-style      pill | bigword
+    --caption-max-words  words per caption group (1-4)
+    --proof-split        on | off   fallback layout for real-footage beats that do not set their
+                         own "layout": "card" | "split" in the shot list
+    --grade-intensity    0 = no grade; >0 applies the brand's "grade" block to real footage
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>reel</title>
+    <script src="assets/vendor/gsap.min.js"></script>
+    <style>
+      /* @@FONTFACE@@ */
+
+      /* @tokens:start */
+      :root {
+        /* stage: the background every scene sits on */
+        --stage: REQUIRED; /* (hex) */
+        --stage-glow-1: REQUIRED; /* (hex) inner colour of the top-centre glow */
+        --stage-glow-2: REQUIRED; /* (hex) outer colour of the glow */
+        --stage-haze: REQUIRED; /* rgba() breathing haze over the glow */
+        --grid: REQUIRED; /* rgba() perspective floor grid lines */
+        --glow: REQUIRED; /* rgba() text glow on hero words */
+        --line: REQUIRED; /* (hex) hairlines, card borders and cool tints inside scenes */
+        --pill-bg: REQUIRED; /* (hex) kicker and chapter pill fill */
+        /* accent: rationed highlight colour (keep it to about 10% of the frame) */
+        --accent: REQUIRED; /* (hex) */
+        --accent-ink: REQUIRED; /* (hex) text that sits ON an accent fill */
+        --accent-text: REQUIRED; /* (hex) the accent used as TEXT on the stage (must pass contrast) */
+        /* text and signal colours */
+        --text: REQUIRED; /* (hex) headlines and main text */
+        --text-soft: REQUIRED; /* (hex) kicker and secondary text */
+        --muted: REQUIRED; /* rgba() or hex: labels, strikethrough words */
+        --win: REQUIRED; /* (hex) things going right: money saved, checks */
+        --burn-1: REQUIRED; /* (hex) stakes gradient start */
+        --burn-2: REQUIRED; /* (hex) stakes gradient end */
+        /* surfaces */
+        --card-bg: REQUIRED; /* rgba() dark cards and tables */
+        --card-border: REQUIRED; /* rgba() card hairline */
+        --card-radius: REQUIRED; /* px */
+        --plate: REQUIRED; /* (hex) light plate behind phone/UI mockups and quotes */
+        --plate-2: REQUIRED; /* (hex) secondary fill on a light plate */
+        --plate-ink: REQUIRED; /* (hex) text on a light plate */
+        --plate-muted: REQUIRED; /* (hex) secondary text on a light plate */
+        --plate-radius: REQUIRED; /* px */
+        --plate-shadow: REQUIRED; /* box-shadow value */
+        /* type: families come from brand.json "fonts" (the build writes them here) */
+        --font-sans: REQUIRED;
+        --font-mono: REQUIRED;
+        --font-serif: REQUIRED;
+        --title-size: REQUIRED; /* px, hook title */
+        --serif-scale: REQUIRED; /* number, size of the one serif accent word vs the sans */
+        /* platform safe zones for TEXT and LOGOS (union of IG Reels, TikTok, Shorts; third-party
+           measurements, not published by the apps). Faces, footage and backgrounds may bleed
+           anywhere. Insets from the canvas edge. Calibrate once from a real posted reel. */
+        --safe-top: 270px;
+        --safe-left: 80px;
+        --safe-right: 150px;
+        --safe-right-upper: 80px;
+        --rail-top: 900px;
+        --safe-bottom: 480px;
+        --hook-top: 285px;
+        --content-bottom: 1180px;
+        /* captions: one fixed line at --caption-y in every mode */
+        --caption-style: REQUIRED; /* bigword | pill */
+        --caption-max-w: 780px;
+        --caption-max-words: REQUIRED; /* 1-4, pill style only */
+        --caption-y: 1280px;
+        --caption-size: REQUIRED; /* px, pill style */
+        --caption-weight: REQUIRED; /* pill style */
+        --caption-tracking: REQUIRED; /* em, pill style */
+        --caption-fg: REQUIRED; /* pill text colour */
+        --caption-bg: REQUIRED; /* pill fill */
+        --caption-radius: REQUIRED; /* px, pill style */
+        --caption-pad: REQUIRED; /* pill padding, e.g. 10px 18px */
+        --bigword-size: REQUIRED; /* px, big-word style (the build shrinks long words, never below 56px) */
+        --bigword-fg: REQUIRED; /* big-word colour */
+        --bigword-shadow: REQUIRED; /* text-shadow value, keeps the word readable over footage */
+        /* face box (stage split) and PiP circle */
+        --face-radius: REQUIRED; /* px */
+        --face-hairline: REQUIRED; /* border value, e.g. 2px solid rgba(...) */
+        --face-glow: REQUIRED; /* box-shadow value */
+        --pip-ring: REQUIRED; /* border value of the PiP circle */
+        /* PiP circle position and diameter (geometry; scripts/build.mjs reads these) */
+        --pip-x: 60px;
+        --pip-y: 1500px;
+        --pip-size: 320px;
+        /* modes and grade */
+        --proof-split: REQUIRED; /* on | off */
+        --grade-intensity: REQUIRED; /* 0-1, 0 = ungraded */
+        /* aliases so registry components added with `hyperframes add` inherit the client look */
+        --bg: var(--stage);
+        --fg: var(--text);
+        --surface: var(--card-bg);
+        --border: var(--card-border);
+        --brand: var(--win);
+        --accent-2: var(--burn-2);
+        --font-display: var(--font-sans);
+        --radius: var(--card-radius);
+      }
+      /* @tokens:end */
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        background: var(--stage);
+      }
+      /* The main root is NOT id="root": every sub-composition root on the assembled page is
+         id="root", so a #root rule here would also paint them (and theirs would paint us). */
+      #stage-root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: var(--stage);
+        font-family: var(--font-sans);
+        color: var(--text);
+      }
+      .layer {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 1080px;
+      }
+      /* untimed wrapper that positions/animates a timed media element (plates, screen media, PiP) */
+      .media-wrap {
+        position: absolute;
+        overflow: hidden;
+      }
+      .media-wrap > video.fill {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .face {
+        position: absolute;
+        object-fit: fill;
+      }
+      .face-hair {
+        position: absolute;
+        border: var(--face-hairline);
+        border-radius: var(--face-radius);
+        box-shadow: var(--face-glow);
+      }
+      .pip-wrap {
+        position: absolute;
+        left: var(--pip-x);
+        top: var(--pip-y);
+        width: var(--pip-size);
+        height: var(--pip-size);
+      }
+      .pip-ring {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: var(--pip-size);
+        height: var(--pip-size);
+        border: var(--pip-ring);
+        border-radius: 50%;
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+      }
+      .proof-tag-pill {
+        position: absolute;
+        left: var(--safe-left);
+        top: var(--hook-top);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 20px;
+        border-radius: 999px;
+        background: rgba(var(--stage-rgb), 0.82);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        font-family: var(--font-mono);
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        color: var(--text);
+        white-space: nowrap;
+      }
+      .proof-tag-dot {
+        display: block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--win);
+        box-shadow: 0 0 12px var(--win);
+      }
+      /* captions: the clip IS the caption row, pinned to --caption-y in every mode,
+         capped at --caption-max-w and centred on x 540 (right-rail safe) */
+      .cap {
+        position: absolute;
+        left: calc(540px - var(--caption-max-w) / 2);
+        top: calc(var(--caption-y) - 70px);
+        width: var(--caption-max-w);
+        height: 140px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .pill {
+        display: block;
+        font-family: var(--font-mono);
+        font-weight: var(--caption-weight);
+        font-size: var(--caption-size);
+        letter-spacing: var(--caption-tracking);
+        line-height: 1.25;
+        text-transform: uppercase;
+        color: var(--caption-fg);
+        background: var(--caption-bg);
+        padding: var(--caption-pad);
+        border-radius: var(--caption-radius);
+        white-space: nowrap;
+        max-width: 100%;
+      }
+      .bigword {
+        display: block;
+        font-family: var(--font-sans);
+        font-weight: 900;
+        font-size: var(--bigword-size);
+        letter-spacing: -0.035em;
+        line-height: 1;
+        text-transform: uppercase;
+        color: var(--bigword-fg);
+        text-shadow: var(--bigword-shadow);
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="stage-root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="@@DURATION@@"
+      data-width="1080"
+      data-height="1920"
+      data-fps="30"
+    >
+      <!-- @@LAYERS@@ -->
+    </div>
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      /* @@TIMELINE@@ */
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

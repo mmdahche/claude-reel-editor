@@ -1,0 +1,282 @@
+<!doctype html>
+<!--
+  fx-chart-grow:
+  a glowing accent line draws itself across the stage BEHIND the speaker's free cutout, with an area fill,
+  a glowing head and a faint grid, then lands on one labelled point. The chart only shows the
+  number the speaker says (for example a price that grows in a straight line with usage) and the only labels are the endpoint value and the x-axis name. No other
+  numbers, ticks or comparisons are drawn.
+    layer "back"  (scene, z 10, behind the face): kicker pill, grid, axes, area, line, head dot,
+                  endpoint label (value + unit line).
+    layer "front" (overlay, z 30): the x-axis name, under the axis, clear of the speaker's head.
+  Variables: layer, kicker, value ("$5"), unit ("per month"), axisLabel,
+  x0/x1/yBase/yEnd (px: chart corners; the line runs (x0, yBase) -> (x1, yEnd)),
+  drawAt / landAt (s: the line starts / reaches the endpoint), unitAt (s), span (s).
+-->
+<html
+  lang="en"
+  data-composition-variables='[
+    {"id":"layer","type":"enum","label":"Layer","default":"back","options":[{"value":"back","label":"Back (scene)"},{"value":"front","label":"Front (overlay)"}]},
+    {"id":"kicker","type":"string","label":"Kicker","default":""},
+    {"id":"value","type":"string","label":"Endpoint value","default":"1"},
+    {"id":"unit","type":"string","label":"Endpoint unit line","default":""},
+    {"id":"axisLabel","type":"string","label":"X-axis name","default":""},
+    {"id":"x0","type":"number","label":"Chart left x","default":150},
+    {"id":"x1","type":"number","label":"Chart right x","default":960},
+    {"id":"yBase","type":"number","label":"Axis y","default":1120},
+    {"id":"yEnd","type":"number","label":"Endpoint y","default":560},
+    {"id":"drawAt","type":"number","label":"Line starts (s)","default":0.3,"min":0},
+    {"id":"landAt","type":"number","label":"Line lands (s)","default":1.6,"min":0},
+    {"id":"unitAt","type":"number","label":"Unit line at (s)","default":2.2,"min":0},
+    {"id":"span","type":"number","label":"Host length (s)","default":4,"min":0.1}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          color: var(--text);
+          font-family: var(--font-sans);
+        }
+        .cg-svg {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 1080px;
+          height: 1440px;
+          overflow: visible;
+        }
+        .cg-grid line {
+          stroke: rgba(var(--line-rgb), 0.14);
+          stroke-width: 2;
+        }
+        .cg-axis {
+          stroke: rgba(var(--text-rgb), 0.55);
+          stroke-width: 3;
+          stroke-linecap: round;
+        }
+        .cg-line {
+          fill: none;
+          stroke: var(--accent);
+          stroke-width: 9;
+          stroke-linecap: round;
+          filter: drop-shadow(0 0 12px rgba(var(--accent-rgb), 0.9)) drop-shadow(0 0 30px rgba(var(--accent-rgb), 0.45));
+        }
+        .cg-guide {
+          stroke: rgba(var(--line-rgb), 0.55);
+          stroke-width: 2;
+          stroke-dasharray: 10 10;
+          opacity: 0;
+        }
+        .cg-head,
+        .cg-ring {
+          position: absolute;
+          border-radius: 50%;
+        }
+        .cg-head {
+          width: 30px;
+          height: 30px;
+          margin: -15px 0 0 -15px;
+          background: #ffffff;
+          box-shadow: 0 0 0 6px var(--accent), 0 0 30px 8px rgba(var(--accent-rgb), 0.85);
+          opacity: 0;
+        }
+        .cg-ring {
+          width: 120px;
+          height: 120px;
+          margin: -60px 0 0 -60px;
+          border: 3px solid var(--accent);
+          opacity: 0;
+        }
+        .cg-kicker {
+          position: absolute;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 10px 22px;
+          border: 2px solid rgba(var(--line-rgb), 0.45);
+          border-radius: 999px;
+          background: rgba(var(--stage-rgb), 0.6);
+          font-family: var(--font-mono);
+          font-size: 22px;
+          font-weight: 700;
+          letter-spacing: 0.14em;
+          color: var(--text-soft);
+          white-space: nowrap;
+        }
+        .cg-kdot {
+          display: block;
+          width: 12px;
+          height: 12px;
+          border-radius: 50%;
+          background: var(--win);
+          box-shadow: 0 0 12px var(--win);
+        }
+        .cg-label {
+          position: absolute;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          text-align: right;
+          white-space: nowrap;
+        }
+        .cg-value {
+          display: block;
+          font-size: 150px;
+          font-weight: 900;
+          letter-spacing: -0.05em;
+          line-height: 0.92;
+          color: var(--accent-text);
+          text-shadow: 0 0 40px rgba(var(--accent-rgb), 0.45), 0 6px 30px rgba(0, 0, 0, 0.5);
+        }
+        .cg-unit {
+          display: block;
+          margin-top: 8px;
+          font-size: 40px;
+          font-weight: 800;
+          letter-spacing: -0.02em;
+          line-height: 1.05;
+          text-shadow: 0 4px 22px rgba(0, 0, 0, 0.6);
+        }
+        .cg-axislabel {
+          position: absolute;
+          font-family: var(--font-mono);
+          font-size: 22px;
+          font-weight: 700;
+          letter-spacing: 0.16em;
+          color: var(--text-soft);
+          white-space: nowrap;
+          opacity: 0;
+        }
+      </style>
+      <div id="root" data-composition-id="fx-chart-grow" data-width="1080" data-height="1440"></div>
+      <script>
+        (function () {
+          const root = document.querySelector('[data-composition-id="fx-chart-grow"]');
+          const v = window.__hyperframes.getVariables();
+          const brandTok = (n, f) => (getComputedStyle(root || document.documentElement).getPropertyValue(n).trim() || f);
+          const span = Math.max(0.1, Number(v.span) || 4);
+          const front = v.layer === "front";
+          function tokPx(name, fallback) {
+            const n = parseFloat(getComputedStyle(root).getPropertyValue(name));
+            return Number.isFinite(n) ? n : fallback;
+          }
+          const L = tokPx("--safe-left", 80);
+          const HOOK = tokPx("--hook-top", 285);
+          const R_LOW = 1080 - tokPx("--safe-right", 150);
+          const R_UP = 1080 - tokPx("--safe-right-upper", 80);
+          const x0 = Number(v.x0) || 150;
+          const x1 = Number(v.x1) || 960;
+          const yB = Number(v.yBase) || 1120;
+          const yE = Number(v.yEnd) || 560;
+          const drawAt = Math.max(0, Number(v.drawAt) || 0);
+          const landAt = Math.max(drawAt + 0.3, Number(v.landAt) || drawAt + 1.2);
+          const tl = gsap.timeline({ paused: true });
+          const NS = "http://www.w3.org/2000/svg";
+          function sv(tag, attrs, parent) {
+            const e = document.createElementNS(NS, tag);
+            Object.keys(attrs).forEach(function (k) {
+              e.setAttribute(k, attrs[k]);
+            });
+            parent.appendChild(e);
+            return e;
+          }
+          function el(tag, cls, text) {
+            const e = document.createElement(tag);
+            if (cls) e.className = cls;
+            if (text !== undefined) e.textContent = text;
+            return e;
+          }
+
+          if (front) {
+            const ax = el("span", "cg-axislabel", String(v.axisLabel || ""));
+            ax.style.top = yB + 18 + "px";
+            ax.style.right = 1080 - Math.min(x1, yB + 18 > 900 ? R_LOW : R_UP) + "px";
+            root.appendChild(ax);
+            tl.fromTo(ax, { y: 10, opacity: 0 }, { y: 0, opacity: 1, duration: 0.3, ease: "power2.out" }, 0.25);
+            window.__timelines["fx-chart-grow"] = tl;
+            return;
+          }
+
+          const svg = sv("svg", { class: "cg-svg", viewBox: "0 0 1080 1440" }, root);
+          const defs = sv("defs", {}, svg);
+          const grad = sv("linearGradient", { id: "cg-fill-g", x1: "0", y1: "0", x2: "0", y2: "1" }, defs);
+          sv("stop", { offset: "0", "stop-color": brandTok("--accent", "#888888"), "stop-opacity": "0.34" }, grad);
+          sv("stop", { offset: "1", "stop-color": brandTok("--accent", "#888888"), "stop-opacity": "0" }, grad);
+          // faint grid (4 x 4 cells), drawn in from the axis
+          const grid = sv("g", { class: "cg-grid" }, svg);
+          const gl = [];
+          for (let k = 1; k <= 4; k++) {
+            const y = yB - ((yB - yE) * k) / 4;
+            gl.push(sv("line", { x1: x0, y1: y, x2: x1, y2: y }, grid));
+            const x = x0 + ((x1 - x0) * k) / 4;
+            gl.push(sv("line", { x1: x, y1: yB, x2: x, y2: yE - 30 }, grid));
+          }
+          const axX = sv("line", { class: "cg-axis", x1: x0, y1: yB, x2: x1 + 20, y2: yB }, svg);
+          const axY = sv("line", { class: "cg-axis", x1: x0, y1: yB, x2: x0, y2: yE - 50 }, svg);
+          const area = sv("polygon", { points: x0 + "," + yB + " " + x1 + "," + yE + " " + x1 + "," + yB, fill: "url(#cg-fill-g)" }, svg);
+          const len = Math.hypot(x1 - x0, yB - yE);
+          const line = sv("line", { class: "cg-line", x1: x0, y1: yB, x2: x1, y2: yE, "stroke-dasharray": len.toFixed(1), "stroke-dashoffset": len.toFixed(1) }, svg);
+          const gH = sv("line", { class: "cg-guide", x1: x0, y1: yE, x2: x1, y2: yE }, svg);
+          const gV = sv("line", { class: "cg-guide", x1: x1, y1: yE, x2: x1, y2: yB }, svg);
+          const head = el("i", "cg-head");
+          head.style.left = x0 + "px";
+          head.style.top = yB + "px";
+          root.appendChild(head);
+          const ring = el("i", "cg-ring");
+          ring.style.left = x1 + "px";
+          ring.style.top = yE + "px";
+          root.appendChild(ring);
+
+          if (String(v.kicker || "")) {
+            const k = el("div", "cg-kicker");
+            k.appendChild(el("i", "cg-kdot"));
+            k.appendChild(el("span", "", String(v.kicker)));
+            k.style.left = L + 10 + "px";
+            k.style.top = HOOK + "px";
+            root.appendChild(k);
+            tl.fromTo(k, { scale: 0.92, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.2, ease: "power2.out" }, 0.05);
+          }
+          const label = el("div", "cg-label");
+          const val = el("span", "cg-value", String(v.value || ""));
+          const unit = el("span", "cg-unit", String(v.unit || ""));
+          label.appendChild(val);
+          label.appendChild(unit);
+          label.style.right = 1080 - (R_UP - 10) + "px";
+          label.style.top = Math.max(HOOK + 70, yE - 230) + "px";
+          root.appendChild(label);
+
+          // grid and axes draw in
+          tl.fromTo(axX, { attr: { x2: x0 } }, { attr: { x2: x1 + 20 }, duration: 0.45, ease: "power3.out" }, 0.0);
+          tl.fromTo(axY, { attr: { y2: yB } }, { attr: { y2: yE - 50 }, duration: 0.45, ease: "power3.out" }, 0.05);
+          tl.fromTo(gl, { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out", stagger: 0.03 }, 0.1);
+          // the line draws itself; head and area travel with it on the same ease
+          const dur = landAt - drawAt;
+          tl.fromTo(line, { attr: { "stroke-dashoffset": len } }, { attr: { "stroke-dashoffset": 0 }, duration: dur, ease: "power2.inOut" }, drawAt);
+          tl.fromTo(head, { x: 0, y: 0, opacity: 1 }, { x: x1 - x0, y: yE - yB, opacity: 1, duration: dur, ease: "power2.inOut", immediateRender: false }, drawAt);
+          tl.set(head, { opacity: 0 }, 0);
+          tl.set(head, { opacity: 1 }, drawAt);
+          tl.fromTo(area, { attr: { points: x0 + "," + yB + " " + x0 + "," + yB + " " + x0 + "," + yB } }, { attr: { points: x0 + "," + yB + " " + x1 + "," + yE + " " + x1 + "," + yB }, duration: dur, ease: "power2.inOut" }, drawAt);
+          // lands: ring pulse, guides, the value pops, the unit line rises when the speaker says it
+          tl.fromTo(ring, { scale: 0.3, opacity: 0.9 }, { scale: 1.4, opacity: 0, duration: 0.6, ease: "power2.out" }, landAt);
+          tl.fromTo(head, { scale: 1 }, { scale: 1.35, duration: 0.15, ease: "power3.out", yoyo: true, repeat: 1, immediateRender: false }, landAt);
+          tl.fromTo([gH, gV], { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power2.out" }, landAt + 0.05);
+          tl.fromTo(val, { scale: 1.25, opacity: 0, transformOrigin: "100% 50%" }, { scale: 1, opacity: 1, duration: 0.3, ease: "back.out(2)" }, landAt);
+          tl.fromTo(unit, { y: 26, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power3.out" }, Math.max(landAt + 0.1, Number(v.unitAt) || landAt + 0.5));
+          // idle life: the endpoint keeps pulsing
+          const settle = landAt + 0.7;
+          const reps = Math.floor((span - settle) / 0.9);
+          for (let k = 0; k < reps; k++) {
+            tl.fromTo(ring, { scale: 0.5, opacity: 0.6 }, { scale: 1.3, opacity: 0, duration: 0.8, ease: "power2.out", immediateRender: false }, settle + k * 0.9);
+          }
+          window.__timelines["fx-chart-grow"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

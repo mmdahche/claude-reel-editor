@@ -1,0 +1,54 @@
+# generated
+index.html
+renders/
+node_modules/
+assets/vendor/gsap.min.js
+scripts/.bin/
+scripts/cutout/.bin/
+__pycache__/
+*.pyc
+.bak-*/
+.transcode-cache/
+
+# client material and footage (never commit; client property)
+input/
+videos/
+clients/*
+!clients/README.md
+!clients/_example/
+!clients/_demo-test-only/
+
+# synthetic demo media (made by scripts/make-demo.sh)
+demo-synthetic/face.mp4
+demo-synthetic/transcript.json
+demo-synthetic/captures/
+
+# media and licensed assets (their licences forbid redistribution)
+*.mp4
+*.mov
+*.m4v
+*.webm
+*.mkv
+*.wav
+*.mp3
+*.m4a
+*.aiff
+*.ogg
+*.ttf
+*.otf
+*.woff
+*.woff2
+assets/sfx/*
+!assets/sfx/README.md
+assets/music/*
+!assets/music/README.md
+
+# secrets and local config
+.env
+.env.*
+.secrets/
+scripts/remote/workers.conf
+.claude/settings.local.json
+
+# macOS
+.DS_Store

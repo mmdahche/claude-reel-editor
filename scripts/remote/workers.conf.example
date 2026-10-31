@@ -1,0 +1,11 @@
+# OPTIONAL worker laptops for scripts/remote/*.sh. You do NOT need this: every step runs locally.
+# To use one: copy this file to workers.conf (git-ignored) and replace the example line.
+# One worker per line, columns split by spaces. The first line is the default; pick another
+# with WORKER=<name>.
+# Each worker needs: Remote Login (ssh) on, this Mac's ssh public key in its authorized_keys,
+# node + npx + ffmpeg + ffprobe on the PATH of a non-interactive ssh shell (~/.zshenv), and the
+# kit's one-time setup (AGENT-SETUP.md) done there.
+#
+# name          user        address                 host-key-alias   ssh key
+# (address: a hostname or IP on your LAN or VPN; host-key-alias "-" means none)
+example-worker  example     worker.example.invalid  -                ~/.ssh/id_ed25519_example

@@ -1,0 +1,147 @@
+<!doctype html>
+<!--
+  fx-pills: the text that rides on effect plates. Use it as an OVERLAY (z 30, in front of the face) so a label next to the speaker's head is
+  never read as hidden behind the cutout. Up to 4 items, each a mono pill (green status dot)
+  or a headline line (sans 850, one *serif* accent word allowed), placed by x (left/centre/right
+  anchor) and y, and popping in at its own time. Callers keep every item inside the safe zone
+  (x 80-1000 above y 900, x 80-930 below; above --content-bottom) and clear of the face.
+  Variables: items (JSON array of {text, kind: "pill"|"line", x, y, align: "left"|"center"|"right",
+  at, size}), span (s).
+-->
+<html
+  lang="en"
+  data-composition-variables='[
+    {"id":"items","type":"string","label":"Items (JSON array)","default":"[{\"text\":\"LABEL\",\"kind\":\"pill\",\"x\":540,\"y\":300,\"align\":\"center\",\"at\":0.1}]"},
+    {"id":"span","type":"number","label":"Host length (s)","default":3,"min":0.1}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          color: var(--text);
+          font-family: var(--font-sans);
+        }
+        .px-item {
+          position: absolute;
+          white-space: nowrap;
+          opacity: 0;
+        }
+        .px-pill {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 10px 22px;
+          border: 2px solid rgba(var(--line-rgb), 0.5);
+          border-radius: 999px;
+          background: rgba(var(--stage-rgb), 0.86);
+          box-shadow: 0 12px 34px rgba(0, 0, 0, 0.45);
+          font-family: var(--font-mono);
+          font-size: 24px;
+          font-weight: 700;
+          letter-spacing: 0.14em;
+          color: var(--text-soft);
+        }
+        .px-dot {
+          display: block;
+          width: 12px;
+          height: 12px;
+          border-radius: 50%;
+          background: var(--win);
+          box-shadow: 0 0 12px var(--win);
+        }
+        .px-line {
+          display: block;
+          font-size: 70px;
+          font-weight: 850;
+          letter-spacing: -0.035em;
+          line-height: 1.04;
+          text-shadow: 0 4px 26px rgba(0, 0, 0, 0.6), 0 0 2px rgba(0, 0, 0, 0.5);
+        }
+        .px-line .serif {
+          display: inline-block;
+          font-family: var(--font-serif);
+          font-style: italic;
+          font-weight: 400;
+          font-size: calc(1em * var(--serif-scale));
+          letter-spacing: 0;
+          line-height: 0.9;
+          color: var(--accent-text);
+        }
+      </style>
+      <div id="root" data-composition-id="fx-pills" data-width="1080" data-height="1440"></div>
+      <script>
+        (function () {
+          const root = document.querySelector('[data-composition-id="fx-pills"]');
+          const v = window.__hyperframes.getVariables();
+          const span = Math.max(0.1, Number(v.span) || 3);
+          let items = [];
+          try {
+            const x = JSON.parse(String(v.items || "[]"));
+            items = Array.isArray(x) ? x.slice(0, 4) : [];
+          } catch (err) {
+            items = [];
+          }
+          const tl = gsap.timeline({ paused: true });
+          items.forEach(function (it) {
+            if (!it || typeof it !== "object") return;
+            const wrap = document.createElement("div");
+            wrap.className = "px-item";
+            const align = it.align === "left" || it.align === "right" ? it.align : "center";
+            const x = Number(it.x);
+            const y = Number(it.y);
+            wrap.style.top = (Number.isFinite(y) ? y : 300) + "px";
+            if (align === "left") wrap.style.left = (Number.isFinite(x) ? x : 80) + "px";
+            else if (align === "right") wrap.style.right = 1080 - (Number.isFinite(x) ? x : 1000) + "px";
+            else {
+              wrap.style.left = "0px";
+              wrap.style.width = "1080px";
+              wrap.style.display = "flex";
+              wrap.style.justifyContent = "center";
+            }
+            if (it.kind === "line") {
+              const line = document.createElement("span");
+              line.className = "px-line";
+              if (Number(it.size) > 0) line.style.fontSize = Number(it.size) + "px";
+              line.style.textAlign = align;
+              String(it.text || "")
+                .split(/(\*[^*]+\*)/)
+                .forEach(function (part) {
+                  if (!part) return;
+                  if (part.length > 2 && part.charAt(0) === "*" && part.charAt(part.length - 1) === "*") {
+                    const s = document.createElement("span");
+                    s.className = "serif";
+                    s.textContent = part.slice(1, -1);
+                    line.appendChild(s);
+                  } else line.appendChild(document.createTextNode(part));
+                });
+              wrap.appendChild(line);
+              const at = Math.max(0, Math.min(span - 0.1, Number(it.at) || 0));
+              tl.fromTo(wrap, { y: 36, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, at);
+            } else {
+              const pill = document.createElement("span");
+              pill.className = "px-pill";
+              const dot = document.createElement("i");
+              dot.className = "px-dot";
+              const txt = document.createElement("span");
+              txt.textContent = String(it.text || "");
+              pill.appendChild(dot);
+              pill.appendChild(txt);
+              wrap.appendChild(pill);
+              const at = Math.max(0, Math.min(span - 0.1, Number(it.at) || 0));
+              tl.fromTo(wrap, { scale: 0.9, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.2, ease: "back.out(2)" }, at);
+            }
+            root.appendChild(wrap);
+          });
+          window.__timelines["fx-pills"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

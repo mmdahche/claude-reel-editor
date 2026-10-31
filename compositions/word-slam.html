@@ -1,0 +1,87 @@
+<!doctype html>
+<!--
+  word-slam (scene 15, overlay): one giant word in the sans at 900 centred on the caption line
+  (--caption-y), scale 1.3 -> 1 and opacity 0 -> 1 in 0.18s (power4.out), holds, no exit.
+  Sized to fit x 70-930 so it still reads with the right-hand action rail covering x > 930.
+  The build cuts caption pills at the slam start so they never sit under it.
+  Mounted full-canvas (1080 x 1920). Variables: word, tone (white|burn), span.
+-->
+<html
+  lang="en"
+  data-composition-variables='[
+    {"id":"word","type":"string","label":"Word","default":"DONE."},
+    {"id":"tone","type":"enum","label":"Tone","default":"white","options":[{"value":"white","label":"White"},{"value":"burn","label":"Burn"}]},
+    {"id":"span","type":"number","label":"Host length (s)","default":1,"min":0.1}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          font-family: var(--font-sans);
+        }
+        .ws-row {
+          position: absolute;
+          left: 70px;
+          width: 860px;
+          top: calc(var(--caption-y) - 160px);
+          height: 320px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .ws-word {
+          display: block;
+          font-size: 200px;
+          font-weight: 900;
+          letter-spacing: -0.05em;
+          line-height: 1;
+          text-transform: uppercase;
+          color: #ffffff;
+          white-space: nowrap;
+          text-shadow: 0 10px 0 rgba(0, 0, 0, 0.35), 0 0 60px rgba(0, 0, 0, 0.55);
+          opacity: 0;
+        }
+        .ws-word.burn {
+          color: var(--burn-2);
+        }
+      </style>
+      <div id="root" data-composition-id="word-slam" data-width="1080" data-height="1920">
+        <div class="ws-row"><span class="ws-word"></span></div>
+      </div>
+      <script>
+        (async function () {
+          const root = document.querySelector('[data-composition-id="word-slam"]');
+          const v = window.__hyperframes.getVariables();
+          const word = root.querySelector(".ws-word");
+          word.textContent = String(v.word || "");
+          if (v.tone === "burn") word.classList.add("burn");
+          try {
+            const fam = getComputedStyle(root || document.documentElement).getPropertyValue("--font-sans").trim() || "sans-serif";
+            await document.fonts.load("900 100px " + fam);
+          } catch (err) {
+            // measurement below still works with the fallback font; size stays conservative
+          }
+          // fit once at setup (never at tween time): 860px row, 240px cap
+          word.style.fontSize = "100px";
+          let w100 = word.getBoundingClientRect().width;
+          if (!(w100 > 10)) {
+            // host not laid out yet (hidden at mount): heavy sans caps average ~0.7em per glyph
+            w100 = Math.max(1, Array.from(word.textContent).length) * 70;
+          }
+          const size = Math.max(90, Math.min(240, Math.floor((100 * 840) / w100)));
+          word.style.fontSize = size + "px";
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(word, { scale: 1.3, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.18, ease: "power4.out" }, 0);
+          window.__timelines["word-slam"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

@@ -1,0 +1,2 @@
+# One name per line: brand, product and people names the transcriber may mishear.
+# scripts/script_snap.py --terms-file clients/<client-name>/terms.txt respells them to match SCRIPT.md.

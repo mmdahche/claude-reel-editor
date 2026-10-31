@@ -1,0 +1,261 @@
+<!doctype html>
+<!--
+  hook-title (scene 1): the designed text hook in the text-hook slot (y 180-460).
+  The sans (850 weight) at --title-size, max 2 lines, top at --hook-top (y 285, platform safe zone); wrap ONE word in *asterisks* to set it in
+  the serif italic with an accent underline. Optional mono status kicker (green dot).
+  Optional visual tile (logo / key art) drops onto the stage with a beam + glowing pad.
+  persistAt > 0: at that scene-local time the tile leaves and a top scrim fades in, so the
+  title can stay over the next beat (footage or a split) as WORKFLOW.md (scene 1) describes.
+  Variables: kicker, line1, line2, visual (image path or ""), visualFit (cover|contain),
+  visualColor (CSS background for beam/pad), persistAt (s, 0 = never), span (s).
+-->
+<html
+  lang="en"
+  data-composition-variables='[
+    {"id":"kicker","type":"string","label":"Kicker","default":"NEW"},
+    {"id":"line1","type":"string","label":"Line 1","default":"Your first line."},
+    {"id":"line2","type":"string","label":"Line 2 (*serif* word)","default":"One *accent* word."},
+    {"id":"visual","type":"string","label":"Visual image","default":""},
+    {"id":"visualFit","type":"enum","label":"Visual fit","default":"cover","options":[{"value":"cover","label":"Cover"},{"value":"contain","label":"Contain"}]},
+    {"id":"visualColor","type":"string","label":"Beam/pad colour","default":""},
+    {"id":"persistAt","type":"number","label":"Persist from (s)","default":0,"min":0},
+    {"id":"span","type":"number","label":"Host length (s)","default":3,"min":0.1}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          color: var(--text);
+          font-family: var(--font-sans);
+        }
+        .ht-scrim {
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 0;
+          height: 700px;
+          background: linear-gradient(to bottom, rgba(var(--stage-rgb), 0.86) 0%, rgba(var(--stage-rgb), 0.62) 55%, rgba(var(--stage-rgb), 0) 100%);
+          opacity: 0;
+        }
+        .ht-slot {
+          position: absolute;
+          left: var(--safe-left);
+          right: var(--safe-right-upper);
+          top: var(--hook-top);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+        }
+        .ht-kicker {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 10px 22px;
+          margin-bottom: 20px;
+          border: 2px solid rgba(var(--line-rgb), 0.45);
+          border-radius: 999px;
+          background: rgba(var(--stage-rgb), 0.55);
+          font-family: var(--font-mono);
+          font-size: 23px;
+          font-weight: 700;
+          letter-spacing: 0.16em;
+          color: var(--text-soft);
+          white-space: nowrap;
+        }
+        .ht-dot {
+          display: block;
+          width: 12px;
+          height: 12px;
+          border-radius: 50%;
+          background: var(--win);
+          box-shadow: 0 0 12px var(--win);
+        }
+        .ht-line {
+          display: block;
+          font-size: var(--title-size);
+          font-weight: 850;
+          letter-spacing: -0.04em;
+          line-height: 1.02;
+          text-shadow: 0 4px 30px rgba(0, 0, 0, 0.35);
+        }
+        .ht-line .serif {
+          position: relative;
+          display: inline-block;
+          font-family: var(--font-serif);
+          font-style: italic;
+          font-weight: 400;
+          font-size: calc(1em * var(--serif-scale));
+          letter-spacing: 0;
+          line-height: 0.9;
+          padding: 0 0.04em;
+        }
+        .ht-uline {
+          position: absolute;
+          left: 0.04em;
+          right: 0.04em;
+          bottom: -0.02em;
+          height: 7px;
+          border-radius: 4px;
+          background: var(--accent);
+          box-shadow: 0 0 18px var(--accent);
+          transform-origin: 0% 50%;
+        }
+        .ht-visual {
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 0;
+          height: 1180px;
+        }
+        .ht-beam {
+          position: absolute;
+          left: 170px;
+          right: 170px;
+          top: 0;
+          height: 1100px;
+          clip-path: polygon(40% 0, 60% 0, 100% 100%, 0 100%);
+          opacity: 0;
+        }
+        .ht-pad {
+          position: absolute;
+          left: 50%;
+          top: 1000px;
+          width: 560px;
+          height: 90px;
+          margin-left: -280px;
+          border-radius: 50%;
+          filter: blur(8px);
+          opacity: 0;
+        }
+        .ht-tile {
+          position: absolute;
+          left: 150px;
+          top: 590px;
+          width: 780px;
+          height: 439px;
+          border-radius: var(--card-radius);
+          overflow: hidden;
+          background: #000;
+          border: 2px solid rgba(255, 255, 255, 0.14);
+          box-shadow: 0 40px 120px rgba(0, 0, 0, 0.55);
+          opacity: 0;
+        }
+        .ht-img {
+          display: block;
+          width: 100%;
+          height: 100%;
+        }
+      </style>
+      <div id="root" data-composition-id="hook-title" data-width="1080" data-height="1440">
+        <div class="ht-visual">
+          <div class="ht-beam"></div>
+          <div class="ht-pad"></div>
+          <div class="ht-tile"><img class="ht-img" alt="" /></div>
+        </div>
+        <div class="ht-scrim"></div>
+        <div class="ht-slot">
+          <span class="ht-kicker"><i class="ht-dot"></i><span class="ht-kicker-text"></span></span>
+          <span class="ht-line ht-l1"></span>
+          <span class="ht-line ht-l2"></span>
+        </div>
+      </div>
+      <script>
+        (function () {
+          const root = document.querySelector('[data-composition-id="hook-title"]');
+          const v = window.__hyperframes.getVariables();
+          const brandTok = (n, f) => (getComputedStyle(root || document.documentElement).getPropertyValue(n).trim() || f);
+          const span = Math.max(0.1, Number(v.span) || 3);
+          const persistAt = Math.max(0, Number(v.persistAt) || 0);
+
+          // "*word*" -> serif italic span with an accent underline. textContent only.
+          function richText(el, text) {
+            el.textContent = "";
+            String(text || "")
+              .split(/(\*[^*]+\*)/)
+              .forEach(function (part) {
+                if (!part) return;
+                if (part.length > 2 && part.charAt(0) === "*" && part.charAt(part.length - 1) === "*") {
+                  const s = document.createElement("span");
+                  s.className = "serif";
+                  s.textContent = part.slice(1, -1);
+                  const u = document.createElement("span");
+                  u.className = "ht-uline";
+                  s.appendChild(u);
+                  el.appendChild(s);
+                } else {
+                  el.appendChild(document.createTextNode(part));
+                }
+              });
+          }
+
+          const kicker = root.querySelector(".ht-kicker");
+          const kickerText = String(v.kicker || "");
+          root.querySelector(".ht-kicker-text").textContent = kickerText;
+          if (!kickerText) kicker.style.display = "none";
+          const l1 = root.querySelector(".ht-l1");
+          const l2 = root.querySelector(".ht-l2");
+          richText(l1, v.line1);
+          richText(l2, v.line2);
+          if (!String(v.line2 || "")) l2.style.display = "none";
+
+          const visual = root.querySelector(".ht-visual");
+          const tile = root.querySelector(".ht-tile");
+          const img = root.querySelector(".ht-img");
+          const beam = root.querySelector(".ht-beam");
+          const pad = root.querySelector(".ht-pad");
+          const hasVisual = String(v.visual || "") !== "";
+          if (hasVisual) {
+            img.setAttribute("src", String(v.visual));
+            img.style.objectFit = v.visualFit === "contain" ? "contain" : "cover";
+            if (v.visualFit === "contain") img.style.padding = "8%";
+            const col = String(v.visualColor || brandTok("--accent", "#888888"));
+            pad.style.background = col;
+            beam.style.background = "linear-gradient(to bottom, rgba(255,255,255,0), rgba(var(--line-rgb),0.28))";
+          } else {
+            visual.style.display = "none";
+          }
+
+          const tl = gsap.timeline({ paused: true });
+          // text rises: kicker pops, lines rise staggered, serif word lands +0.1s
+          tl.fromTo(kicker, { scale: 0.92, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.2, ease: "power2.out" }, 0.02);
+          tl.fromTo(l1, { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, 0.08);
+          tl.fromTo(l2, { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, 0.16);
+          root.querySelectorAll(".serif").forEach(function (s) {
+            tl.fromTo(s, { y: 18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power3.out" }, 0.26);
+          });
+          root.querySelectorAll(".ht-uline").forEach(function (u) {
+            tl.fromTo(u, { scaleX: 0 }, { scaleX: 1, duration: 0.4, ease: "power3.inOut" }, 0.5);
+          });
+
+          if (hasVisual) {
+            // drop onto the stage with beam flash + glowing pad (the scene's signature move)
+            const t = 0.22;
+            tl.fromTo(beam, { opacity: 0 }, { opacity: 1, duration: 0.25, ease: "power2.out" }, t);
+            tl.to(beam, { opacity: 0.4, duration: 0.8, ease: "power2.inOut" }, t + 0.6);
+            tl.fromTo(pad, { opacity: 0, scale: 0.4 }, { opacity: 0.85, scale: 1, duration: 0.5, ease: "back.out(2)" }, t + 0.05);
+            tl.fromTo(tile, { y: -140, scale: 0.7, opacity: 0 }, { y: 0, scale: 1, opacity: 1, duration: 0.6, ease: "back.out(1.6)" }, t);
+            // idle life: the tile floats once it lands
+            const floatEnd = persistAt > 0 ? persistAt : span;
+            const floatReps = Math.max(0, Math.floor((floatEnd - (t + 0.7)) / 0.9) - 1);
+            if (floatEnd - (t + 0.7) > 0.9) {
+              tl.fromTo(tile, { y: 0 }, { y: -18, duration: 0.9, ease: "sine.inOut", yoyo: true, repeat: floatReps, immediateRender: false }, t + 0.7);
+            }
+          }
+          if (persistAt > 0) {
+            if (hasVisual) tl.to(visual, { y: -80, opacity: 0, duration: 0.3, ease: "power2.in" }, Math.max(0, persistAt - 0.3));
+            tl.to(root.querySelector(".ht-scrim"), { opacity: 1, duration: 0.2, ease: "power2.out" }, persistAt - 0.05);
+          }
+          window.__timelines["hook-title"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

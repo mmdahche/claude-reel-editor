@@ -1,0 +1,418 @@
+<!doctype html>
+<!--
+  steps (scene 6): 3-5 steps reveal one per beat as dark cards on a stepper rail (registry
+  state-chip-rail is the reference). Each step gets a mono pill number on the rail; the step
+  being said is highlighted (accent sweep, label brightens to white); when the next step
+  lands, the previous one is done: its accent checkmark lands (circle pops, tick draws on),
+  its pill fills accent and the rail fills down to the next pill. The last step completes at
+  doneAt. Checks use --accent.
+  Layout: title from --hook-top inside --safe-left / --safe-right-upper; the list sits inside
+  the symmetric right-rail-safe band (x 150-930 with the default tokens) and ends above
+  --content-bottom, so nothing reaches the caption band.
+  Variables:
+    kicker, title ("line / line", one *serif* word), span,
+    steps (JSON array of strings or {text}, <= 5; keep each to ~5 words),
+    times (JSON array of scene-local s: when each step lands; default 0.3 + 0.8 i),
+    doneAt (s, 0 = last step + 0.7): the last step's check lands
+-->
+<html
+  lang="en"
+  data-composition-variables='[
+    {"id":"kicker","type":"string","label":"Kicker","default":""},
+    {"id":"title","type":"string","label":"Title (/ = new line, *serif*)","default":"The *setup*"},
+    {"id":"steps","type":"string","label":"Steps (JSON array)","default":"[\"Open the app\",\"Fill the form\",\"Submit\"]"},
+    {"id":"times","type":"string","label":"Times (JSON array, s)","default":"[0.3,1.1,1.9]"},
+    {"id":"doneAt","type":"number","label":"Last check at (s, 0 = auto)","default":0,"min":0},
+    {"id":"span","type":"number","label":"Host length (s)","default":4,"min":0.1}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          color: var(--text);
+          font-family: var(--font-sans);
+        }
+        .sx-head {
+          position: absolute;
+          left: var(--safe-left);
+          right: var(--safe-right-upper);
+          top: var(--hook-top);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+        }
+        .sx-kicker {
+          display: block;
+          padding: 10px 22px;
+          margin-bottom: 18px;
+          border: 2px solid rgba(var(--line-rgb), 0.45);
+          border-radius: 999px;
+          font-family: var(--font-mono);
+          font-size: 23px;
+          font-weight: 700;
+          letter-spacing: 0.16em;
+          color: var(--text-soft);
+          white-space: nowrap;
+        }
+        .sx-line {
+          display: block;
+          font-size: 82px;
+          font-weight: 850;
+          letter-spacing: -0.04em;
+          line-height: 1.02;
+        }
+        .sx-line .serif {
+          display: inline-block;
+          font-family: var(--font-serif);
+          font-style: italic;
+          font-weight: 400;
+          font-size: calc(1em * var(--serif-scale));
+          letter-spacing: 0;
+          line-height: 0.9;
+        }
+        .sx-rail,
+        .sx-fill {
+          position: absolute;
+          width: 4px;
+          border-radius: 2px;
+        }
+        .sx-rail {
+          background: rgba(var(--line-rgb), 0.2);
+          opacity: 0;
+        }
+        .sx-fill {
+          background: var(--accent);
+          box-shadow: 0 0 16px var(--accent);
+          transform-origin: 50% 0%;
+        }
+        .sx-pill {
+          position: absolute;
+          width: 96px;
+          height: 60px;
+          border-radius: 999px;
+          background: rgba(var(--stage-rgb), 0.92);
+          border: 2px solid rgba(var(--line-rgb), 0.45);
+          opacity: 0;
+        }
+        .sx-pill-on {
+          position: absolute;
+          inset: -2px;
+          border-radius: 999px;
+          border: 2px solid var(--accent);
+          box-shadow: 0 0 24px color-mix(in oklab, var(--accent) 40%, transparent);
+          opacity: 0;
+        }
+        .sx-pill-fill {
+          position: absolute;
+          inset: -2px;
+          border-radius: 999px;
+          background: var(--accent);
+          opacity: 0;
+        }
+        .sx-num {
+          position: absolute;
+          inset: -2px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-family: var(--font-mono);
+          font-size: 25px;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+          color: var(--text-soft);
+        }
+        .sx-card {
+          position: absolute;
+          display: flex;
+          align-items: center;
+          gap: 20px;
+          padding: 0 26px 0 30px;
+          border-radius: 26px;
+          background: var(--card-bg);
+          border: 2px solid var(--card-border);
+          box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+          overflow: hidden;
+          opacity: 0;
+        }
+        .sx-hl {
+          position: absolute;
+          inset: 0;
+          border-radius: 24px;
+          background: linear-gradient(90deg, color-mix(in oklab, var(--accent) 30%, transparent), color-mix(in oklab, var(--accent) 8%, transparent));
+          box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--accent) 70%, transparent);
+          transform-origin: 0% 50%;
+          opacity: 0;
+        }
+        .sx-text {
+          position: relative;
+          display: block;
+          flex: 1 1 auto;
+          font-weight: 750;
+          letter-spacing: -0.02em;
+          line-height: 1.08;
+          color: rgba(var(--text-rgb), 0.82);
+        }
+        .sx-check {
+          position: relative;
+          display: block;
+          flex: 0 0 auto;
+          width: 58px;
+          height: 58px;
+          border-radius: 50%;
+          border: 3px solid rgba(var(--line-rgb), 0.32);
+        }
+        .sx-halo {
+          position: absolute;
+          inset: -14px;
+          border-radius: 50%;
+          background: radial-gradient(closest-side, color-mix(in oklab, var(--accent) 55%, transparent), rgba(0, 0, 0, 0));
+          opacity: 0;
+        }
+        .sx-dot {
+          position: absolute;
+          inset: -3px;
+          border-radius: 50%;
+          background: var(--accent);
+          opacity: 0;
+        }
+        .sx-tick {
+          position: absolute;
+          inset: -3px;
+          width: 58px;
+          height: 58px;
+        }
+        .sx-tick path {
+          fill: none;
+          stroke: var(--accent-ink);
+          stroke-width: 6;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+        }
+      </style>
+      <div id="root" data-composition-id="steps" data-width="1080" data-height="1440">
+        <div class="sx-head"></div>
+        <div class="sx-list"></div>
+      </div>
+      <script>
+        (function () {
+          const root = document.querySelector('[data-composition-id="steps"]');
+          const v = window.__hyperframes.getVariables();
+          const brandTok = (n, f) => (getComputedStyle(root || document.documentElement).getPropertyValue(n).trim() || f);
+          const span = Math.max(0.1, Number(v.span) || 4);
+
+          function tokPx(name, fallback) {
+            const n = parseFloat(getComputedStyle(root).getPropertyValue(name));
+            return Number.isFinite(n) ? n : fallback;
+          }
+          const X0 = Math.max(tokPx("--safe-left", 80), tokPx("--safe-right", 150));
+          const X1 = 1080 - tokPx("--safe-right", 150);
+          const BOTTOM = tokPx("--content-bottom", 1180) - 20;
+          const HOOK = tokPx("--hook-top", 285);
+
+          function arr(s) {
+            try {
+              const x = JSON.parse(String(s || "[]"));
+              return Array.isArray(x) ? x : [];
+            } catch (err) {
+              return [];
+            }
+          }
+          function richText(el, text) {
+            String(text || "")
+              .split(/(\*[^*]+\*)/)
+              .forEach(function (part) {
+                if (!part) return;
+                if (part.length > 2 && part.charAt(0) === "*" && part.charAt(part.length - 1) === "*") {
+                  const s = document.createElement("span");
+                  s.className = "serif";
+                  s.textContent = part.slice(1, -1);
+                  el.appendChild(s);
+                } else {
+                  el.appendChild(document.createTextNode(part));
+                }
+              });
+          }
+
+          const steps = arr(v.steps)
+            .slice(0, 5)
+            .map(function (s) {
+              return s !== null && typeof s === "object" ? String(s.text || "") : String(s);
+            });
+          const times = arr(v.times);
+          const n = steps.length;
+
+          // heading
+          const head = root.querySelector(".sx-head");
+          let headBottom = 0;
+          let kicker = null;
+          if (String(v.kicker || "")) {
+            kicker = document.createElement("span");
+            kicker.className = "sx-kicker";
+            kicker.textContent = String(v.kicker);
+            head.appendChild(kicker);
+            headBottom = HOOK + 68;
+          }
+          const lineEls = String(v.title || "")
+            .split(" / ")
+            .filter(function (s) {
+              return s.trim() !== "";
+            })
+            .slice(0, 2)
+            .map(function (txt) {
+              const el = document.createElement("span");
+              el.className = "sx-line";
+              richText(el, txt);
+              head.appendChild(el);
+              return el;
+            });
+          if (lineEls.length) headBottom = (headBottom || HOOK) + lineEls.length * 84;
+
+          // list geometry: pills on a rail at the left, cards to the right
+          const top = headBottom ? Math.max(headBottom + 56, HOOK + 160) : HOOK + 40;
+          const avail = BOTTOM - top;
+          const gap = n >= 5 ? 18 : 26;
+          const rowH = Math.max(84, Math.min(128, Math.floor((avail - gap * Math.max(0, n - 1)) / Math.max(1, n))));
+          const blockH = n * rowH + gap * Math.max(0, n - 1);
+          const y0 = Math.round(top + Math.max(0, (avail - blockH) * 0.35));
+          const PILL_W = 96;
+          const PILL_H = 60;
+          const cardX = X0 + PILL_W + 24;
+          const cardW = X1 - cardX;
+          const railX = X0 + PILL_W / 2 - 2;
+          const list = root.querySelector(".sx-list");
+
+          let rail = null;
+          let fill = null;
+          if (n > 1) {
+            rail = document.createElement("div");
+            rail.className = "sx-rail";
+            rail.style.left = railX + "px";
+            rail.style.top = y0 + rowH / 2 + "px";
+            rail.style.height = (n - 1) * (rowH + gap) + "px";
+            fill = document.createElement("div");
+            fill.className = "sx-fill";
+            fill.style.left = railX + "px";
+            fill.style.top = y0 + rowH / 2 + "px";
+            fill.style.height = (n - 1) * (rowH + gap) + "px";
+            list.appendChild(rail);
+            list.appendChild(fill);
+          }
+
+          const textMax = cardW - 30 - 26 - 58 - 20;
+          const rows = steps.map(function (text, i) {
+            const y = y0 + i * (rowH + gap);
+            const pill = document.createElement("div");
+            pill.className = "sx-pill";
+            pill.style.left = X0 + "px";
+            pill.style.top = y + (rowH - PILL_H) / 2 + "px";
+            const num = document.createElement("span");
+            num.className = "sx-num";
+            num.textContent = String(i + 1).padStart(2, "0");
+            const pillFill = document.createElement("i");
+            pillFill.className = "sx-pill-fill";
+            const pillOn = document.createElement("i");
+            pillOn.className = "sx-pill-on";
+            pill.appendChild(pillFill);
+            pill.appendChild(pillOn);
+            pill.appendChild(num);
+
+            const card = document.createElement("div");
+            card.className = "sx-card";
+            card.style.left = cardX + "px";
+            card.style.top = y + "px";
+            card.style.width = cardW + "px";
+            card.style.height = rowH + "px";
+            const hl = document.createElement("div");
+            hl.className = "sx-hl";
+            const label = document.createElement("span");
+            label.className = "sx-text";
+            label.textContent = text;
+            // a sans at 750 averages ~0.55em per glyph: one line when it fits, otherwise two
+            const oneLine = Math.floor(textMax / Math.max(1, text.length * 0.55));
+            const size = oneLine >= 30 ? Math.min(42, oneLine) : Math.max(28, Math.min(34, Math.floor((textMax * 2) / Math.max(1, text.length * 0.55))));
+            label.style.fontSize = size + "px";
+            const check = document.createElement("div");
+            check.className = "sx-check";
+            const halo = document.createElement("i");
+            halo.className = "sx-halo";
+            const dot = document.createElement("i");
+            dot.className = "sx-dot";
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            svg.setAttribute("class", "sx-tick");
+            svg.setAttribute("viewBox", "0 0 58 58");
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            path.setAttribute("d", "M17 30 L25.5 38.5 L42 21");
+            path.setAttribute("stroke-dasharray", "40");
+            path.setAttribute("stroke-dashoffset", "40");
+            svg.appendChild(path);
+            check.appendChild(halo);
+            check.appendChild(dot);
+            check.appendChild(svg);
+            card.appendChild(hl);
+            card.appendChild(label);
+            card.appendChild(check);
+            list.appendChild(pill);
+            list.appendChild(card);
+            const t = Number.isFinite(Number(times[i])) && times[i] !== null ? Math.max(0, Number(times[i])) : 0.3 + i * 0.8;
+            return { pill: pill, pillOn: pillOn, pillFill: pillFill, num: num, card: card, hl: hl, label: label, halo: halo, dot: dot, path: path, t: t };
+          });
+
+          const tl = gsap.timeline({ paused: true });
+          if (kicker) tl.fromTo(kicker, { scale: 0.92, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.2, ease: "power2.out" }, 0.02);
+          lineEls.forEach(function (el, i) {
+            tl.fromTo(el, { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, 0.04 + i * 0.08);
+          });
+          if (rail && rows.length) {
+            tl.fromTo(rail, { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power2.out" }, Math.max(0, rows[0].t - 0.1));
+            tl.set(fill, { scaleY: 0 }, 0);
+          }
+
+          const last = rows.length ? rows[rows.length - 1].t : 0;
+          const doneAt = Number(v.doneAt) > 0 ? Number(v.doneAt) : last + 0.7;
+          rows.forEach(function (r, i) {
+            // land: pill pops, card slides in, highlight sweeps on, label brightens
+            tl.fromTo(r.pill, { scale: 0.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.35, ease: "back.out(2.2)" }, r.t);
+            tl.fromTo(r.pillOn, { opacity: 0 }, { opacity: 1, duration: 0.2, ease: "power2.out" }, r.t + 0.05);
+            tl.fromTo(r.card, { x: -30, opacity: 0 }, { x: 0, opacity: 1, duration: 0.35, ease: "power2.out" }, r.t + 0.04);
+            tl.fromTo(r.hl, { scaleX: 0, opacity: 1 }, { scaleX: 1, opacity: 1, duration: 0.3, ease: "power3.inOut" }, r.t + 0.06);
+            tl.to(r.label, { color: brandTok("--text", "#ffffff"), duration: 0.2 }, r.t + 0.1);
+            // done: when the next step lands (or at doneAt for the last one)
+            const done = i < rows.length - 1 ? rows[i + 1].t - 0.04 : doneAt;
+            if (done >= span) return;
+            tl.to(r.hl, { opacity: 0, duration: 0.25, ease: "power2.out" }, done);
+            tl.to(r.pillOn, { opacity: 0, duration: 0.2, ease: "power2.out" }, done);
+            // fill and ink change together (set, not tweened) so the number never sits at low contrast
+            tl.set(r.pillFill, { opacity: 1 }, done);
+            tl.set(r.num, { color: brandTok("--accent-ink", "#111111") }, done);
+            tl.fromTo(r.pill, { scale: 1 }, { scale: 1.12, duration: 0.15, ease: "power3.out", yoyo: true, repeat: 1, immediateRender: false }, done);
+            tl.fromTo(r.dot, { scale: 0.3, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.3, ease: "back.out(2.4)" }, done);
+            tl.fromTo(r.path, { attr: { "stroke-dashoffset": 40 } }, { attr: { "stroke-dashoffset": 0 }, duration: 0.25, ease: "power2.out" }, done + 0.08);
+            tl.fromTo(r.halo, { opacity: 0 }, { opacity: 0.9, duration: 0.2, ease: "power2.out" }, done + 0.04);
+            tl.to(r.halo, { opacity: 0, duration: 0.4, ease: "power2.in" }, done + 0.3);
+            if (fill && i < rows.length - 1) {
+              tl.to(fill, { scaleY: (i + 1) / (rows.length - 1), duration: 0.3, ease: "power3.inOut" }, done);
+            }
+          });
+
+          // idle life: the finished list's last check glows softly
+          if (rows.length && doneAt < span) {
+            const settle = doneAt + 0.8;
+            const reps = Math.floor((span - settle) / 0.9) - 1;
+            if (reps >= 0) {
+              tl.fromTo(rows[rows.length - 1].halo, { opacity: 0 }, { opacity: 0.6, duration: 0.9, ease: "sine.inOut", yoyo: true, repeat: reps, immediateRender: false }, settle);
+            }
+          }
+          window.__timelines["steps"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

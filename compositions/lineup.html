@@ -1,0 +1,353 @@
+<!doctype html>
+<!--
+  lineup (scene 2): introduce the cast. 2-4 logo tiles (or cut-outs) drop onto the stage
+  one per beat with a beam flash and a glowing pad in the item's colour, then a name and
+  a mono job pill. Optional connector line between neighbours ("X connects to Y").
+  Layout stays inside the platform safe zone: heading from --hook-top, tiles and labels in
+  x 150-930 (below y 900 the right rail covers x > 930).
+  Variables:
+    kicker, heading ("line one / line two", one *serif* word allowed), span,
+    items (JSON string): [{name, img, job, color, jobInk, t, fit: cover|contain,
+                           pad (0-0.3, contain padding), tile: dark|light|none}]
+                           t = scene-local drop time (s)
+    tileAspect (tile width / height; 0.93 for cut-outs, 1.78 for 16:9 logo art)
+    connectAt (s, 0 = no connector)
+  Logo rule: marks are never recoloured or glowed; the colour lives on
+  the beam, pad and job pill only.
+-->
+<html
+  lang="en"
+  data-composition-variables='[
+    {"id":"kicker","type":"string","label":"Kicker","default":"THE LINE-UP"},
+    {"id":"heading","type":"string","label":"Heading (/ = new line, *serif*)","default":"Three options. / Three *lanes*."},
+    {"id":"items","type":"string","label":"Items (JSON)","default":"[]"},
+    {"id":"tileAspect","type":"number","label":"Tile aspect (w/h)","default":0.93,"min":0.4,"max":2.5},
+    {"id":"connectAt","type":"number","label":"Connector at (s)","default":0,"min":0},
+    {"id":"span","type":"number","label":"Host length (s)","default":5,"min":0.1}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          color: var(--text);
+          font-family: var(--font-sans);
+        }
+        .lu-head {
+          position: absolute;
+          left: var(--safe-left);
+          right: var(--safe-right-upper);
+          top: var(--hook-top);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+        }
+        .lu-kicker {
+          display: block;
+          padding: 10px 22px;
+          margin-bottom: 18px;
+          border: 2px solid rgba(var(--line-rgb), 0.45);
+          border-radius: 999px;
+          font-family: var(--font-mono);
+          font-size: 23px;
+          font-weight: 700;
+          letter-spacing: 0.16em;
+          color: var(--text-soft);
+          white-space: nowrap;
+        }
+        .lu-line {
+          display: block;
+          font-size: 84px;
+          font-weight: 850;
+          letter-spacing: -0.04em;
+          line-height: 1.02;
+        }
+        .lu-line .serif {
+          display: inline-block;
+          font-family: var(--font-serif);
+          font-style: italic;
+          font-weight: 400;
+          font-size: calc(1em * var(--serif-scale));
+          letter-spacing: 0;
+          line-height: 0.9;
+          color: var(--text);
+        }
+        .lu-row {
+          position: absolute;
+          left: 150px;
+          width: 780px;
+          top: 420px;
+          height: 760px;
+          display: flex;
+        }
+        .lu-col {
+          position: relative;
+          flex: 1 1 0;
+          height: 100%;
+        }
+        .lu-beam {
+          position: absolute;
+          left: 6%;
+          right: 6%;
+          top: 0;
+          height: 460px;
+          clip-path: polygon(38% 0, 62% 0, 100% 100%, 0 100%);
+          background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(var(--line-rgb), 0.3));
+          opacity: 0;
+        }
+        .lu-pad {
+          position: absolute;
+          left: 50%;
+          top: 445px;
+          width: 280px;
+          height: 64px;
+          margin-left: -140px;
+          border-radius: 50%;
+          filter: blur(6px);
+          opacity: 0;
+        }
+        .lu-tile {
+          position: absolute;
+          left: 50%;
+          top: 140px;
+          width: 280px;
+          height: 300px;
+          margin-left: -140px;
+          border-radius: 32px;
+          overflow: hidden;
+          opacity: 0;
+        }
+        .lu-tile.dark {
+          background: #020409;
+          border: 2px solid rgba(255, 255, 255, 0.14);
+          box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+        }
+        .lu-tile.light {
+          background: var(--plate);
+          border: 1px solid rgba(0, 0, 0, 0.08);
+          box-shadow: var(--plate-shadow);
+        }
+        .lu-img {
+          display: block;
+          width: 100%;
+          height: 100%;
+        }
+        .lu-label {
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 500px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 14px;
+        }
+        .lu-name {
+          display: block;
+          font-size: 52px;
+          font-weight: 800;
+          letter-spacing: -0.03em;
+          opacity: 0;
+        }
+        .lu-job {
+          display: block;
+          padding: 9px 16px;
+          border-radius: 999px;
+          font-family: var(--font-mono);
+          font-size: 21px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          white-space: nowrap;
+          opacity: 0;
+        }
+        .lu-link {
+          position: absolute;
+          top: 286px;
+          height: 8px;
+          border-radius: 4px;
+          background: var(--accent);
+          box-shadow: 0 0 22px var(--accent);
+          transform-origin: 0% 50%;
+          opacity: 0;
+        }
+        .lu-spark {
+          position: absolute;
+          top: 278px;
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          background: #ffffff;
+          box-shadow: 0 0 24px var(--accent), 0 0 8px #ffffff;
+          opacity: 0;
+        }
+      </style>
+      <div id="root" data-composition-id="lineup" data-width="1080" data-height="1440">
+        <div class="lu-head">
+          <span class="lu-kicker"></span>
+        </div>
+        <div class="lu-row"></div>
+      </div>
+      <script>
+        (function () {
+          const root = document.querySelector('[data-composition-id="lineup"]');
+          const v = window.__hyperframes.getVariables();
+          const brandTok = (n, f) => (getComputedStyle(root || document.documentElement).getPropertyValue(n).trim() || f);
+          const span = Math.max(0.1, Number(v.span) || 5);
+          let items = [];
+          try {
+            items = JSON.parse(String(v.items || "[]"));
+          } catch (err) {
+            items = [];
+          }
+          if (!Array.isArray(items)) items = [];
+          items = items.slice(0, 4);
+
+          function richText(el, text) {
+            String(text || "")
+              .split(/(\*[^*]+\*)/)
+              .forEach(function (part) {
+                if (!part) return;
+                if (part.length > 2 && part.charAt(0) === "*" && part.charAt(part.length - 1) === "*") {
+                  const s = document.createElement("span");
+                  s.className = "serif";
+                  s.textContent = part.slice(1, -1);
+                  el.appendChild(s);
+                } else {
+                  el.appendChild(document.createTextNode(part));
+                }
+              });
+          }
+
+          const head = root.querySelector(".lu-head");
+          const kicker = root.querySelector(".lu-kicker");
+          kicker.textContent = String(v.kicker || "");
+          if (!kicker.textContent) kicker.style.display = "none";
+          const lines = String(v.heading || "")
+            .split(" / ")
+            .filter(function (s) {
+              return s.trim() !== "";
+            })
+            .slice(0, 2);
+          const lineEls = lines.map(function (txt) {
+            const el = document.createElement("span");
+            el.className = "lu-line";
+            richText(el, txt);
+            head.appendChild(el);
+            return el;
+          });
+
+          const row = root.querySelector(".lu-row");
+          const n = Math.max(1, items.length);
+          const colW = 780 / n;
+          const aspect = Math.max(0.4, Math.min(2.5, Number(v.tileAspect) || 0.93));
+          const tileW = Math.min(310, colW - 60);
+          const tileH = Math.min(320, Math.round(tileW / aspect));
+          const tileTop = 180;
+          const cols = items.map(function (it) {
+            const col = document.createElement("div");
+            col.className = "lu-col";
+            const beam = document.createElement("div");
+            beam.className = "lu-beam";
+            const pad = document.createElement("div");
+            pad.className = "lu-pad";
+            pad.style.background = String(it.color || "var(--accent)");
+            const tile = document.createElement("div");
+            const tileKind = it.tile === "light" || it.tile === "none" ? it.tile : "dark";
+            tile.className = "lu-tile " + tileKind;
+            tile.style.width = tileW + "px";
+            tile.style.height = tileH + "px";
+            tile.style.top = tileTop + "px";
+            tile.style.marginLeft = -tileW / 2 + "px";
+            beam.style.height = tileTop + tileH + 30 + "px";
+            pad.style.top = tileTop + tileH - 8 + "px";
+            const img = document.createElement("img");
+            img.className = "lu-img";
+            img.setAttribute("src", String(it.img || ""));
+            img.setAttribute("alt", "");
+            img.style.objectFit = it.fit === "cover" ? "cover" : "contain";
+            const padPct = Number.isFinite(Number(it.pad)) ? Math.max(0, Math.min(0.3, Number(it.pad))) : 0.12;
+            if (it.fit !== "cover") img.style.padding = it.tile === "none" ? "0" : Math.round(padPct * 100) + "%";
+            tile.appendChild(img);
+            const label = document.createElement("div");
+            label.className = "lu-label";
+            label.style.top = tileTop + tileH + 56 + "px";
+            const name = document.createElement("span");
+            name.className = "lu-name";
+            name.textContent = String(it.name || "");
+            const job = document.createElement("span");
+            job.className = "lu-job";
+            job.textContent = String(it.job || "");
+            job.style.background = String(it.color || "var(--accent)");
+            job.style.color = String(it.jobInk || brandTok("--plate-ink", "#111111"));
+            if (!job.textContent) job.style.display = "none";
+            label.appendChild(name);
+            label.appendChild(job);
+            col.appendChild(beam);
+            col.appendChild(pad);
+            col.appendChild(tile);
+            col.appendChild(label);
+            row.appendChild(col);
+            return { col: col, beam: beam, pad: pad, tile: tile, name: name, job: job, t: Math.max(0, Number(it.t) || 0) };
+          });
+
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(kicker, { scale: 0.92, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.2, ease: "power2.out" }, 0.02);
+          lineEls.forEach(function (el, i) {
+            tl.fromTo(el, { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, 0.08 + i * 0.08);
+          });
+          cols.forEach(function (c) {
+            const t = c.t;
+            tl.fromTo(c.beam, { opacity: 0 }, { opacity: 1, duration: 0.25, ease: "power2.out" }, t);
+            tl.to(c.beam, { opacity: 0.45, duration: 0.8, ease: "power2.inOut" }, t + 0.6);
+            tl.fromTo(c.pad, { opacity: 0, scale: 0.4 }, { opacity: 0.85, scale: 1, duration: 0.5, ease: "back.out(2)" }, t + 0.05);
+            tl.fromTo(c.tile, { y: -140, opacity: 0, scale: 0.7 }, { y: 0, opacity: 1, scale: 1, duration: 0.6, ease: "back.out(1.6)" }, t);
+            tl.fromTo(c.name, { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power3.out" }, t + 0.25);
+            tl.fromTo(c.job, { scale: 0.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.4, ease: "back.out(2.2)" }, t + 0.4);
+          });
+
+          // connector between neighbouring tiles, drawn left -> right with a travelling spark
+          const connectAt = Math.max(0, Number(v.connectAt) || 0);
+          if (connectAt > 0 && cols.length > 1) {
+            for (let i = 0; i < cols.length - 1; i++) {
+              const x0 = colW * i + colW / 2 + tileW / 2 + 10;
+              const x1 = colW * (i + 1) + colW / 2 - tileW / 2 - 10;
+              if (x1 - x0 < 20) continue;
+              const link = document.createElement("div");
+              link.className = "lu-link";
+              link.style.top = tileTop + tileH / 2 - 4 + "px";
+              link.style.left = x0 + "px";
+              link.style.width = x1 - x0 + "px";
+              const spark = document.createElement("div");
+              spark.className = "lu-spark";
+              spark.style.top = tileTop + tileH / 2 - 12 + "px";
+              spark.style.left = x0 - 12 + "px";
+              row.appendChild(link);
+              row.appendChild(spark);
+              const t = connectAt + i * 0.2;
+              tl.fromTo(link, { scaleX: 0, opacity: 1 }, { scaleX: 1, opacity: 1, duration: 0.4, ease: "power3.inOut" }, t);
+              tl.fromTo(spark, { x: 0, opacity: 0 }, { x: x1 - x0, opacity: 1, duration: 0.4, ease: "power3.inOut" }, t);
+              tl.to(spark, { opacity: 0, duration: 0.2, ease: "power2.out" }, t + 0.4);
+            }
+          }
+
+          // idle life: the first tile floats once everything has landed
+          if (cols.length) {
+            const settle = cols[cols.length - 1].t + 0.8;
+            const reps = Math.floor((span - settle) / 0.9) - 1;
+            if (reps >= 0) {
+              tl.fromTo(cols[0].tile, { y: 0 }, { y: -14, duration: 0.9, ease: "sine.inOut", yoyo: true, repeat: reps, immediateRender: false }, settle);
+            }
+          }
+          window.__timelines["lineup"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

@@ -1,0 +1,269 @@
+<!doctype html>
+<!--
+  fx-checklist:
+  a dark card with a mono kicker, a title (ONE *serif* accent word) and 2-4 rows with
+  empty check boxes. The rows show dim when the title lands; each one ticks off when the speaker says it
+  (box fills with the accent, the tick draws on, a highlight sweeps the row, the label goes white).
+  Layout uses CSS flow (no JS measuring), inside x 110-970 and above --content-bottom, so nothing
+  reaches the caption band; text below y 900 stays left of x 930.
+  Variables: kicker, title ("line / line"), items (JSON array of strings), showAt (s: rows appear),
+  ticks (JSON array of s: when each row ticks), cardTop (px), span (s).
+-->
+<html
+  lang="en"
+  data-composition-variables='[
+    {"id":"kicker","type":"string","label":"Kicker","default":"THE ORDER"},
+    {"id":"title","type":"string","label":"Title (/ = new line, *serif*)","default":"Every *one* must"},
+    {"id":"items","type":"string","label":"Rows (JSON array)","default":"[\"First thing\",\"Second thing\"]"},
+    {"id":"showAt","type":"number","label":"Rows appear at (s)","default":0.3,"min":0},
+    {"id":"ticks","type":"string","label":"Tick times (JSON array, s)","default":"[1.0,2.0]"},
+    {"id":"cardTop","type":"number","label":"Card top (px)","default":330,"min":0},
+    {"id":"span","type":"number","label":"Host length (s)","default":4,"min":0.1}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          color: var(--text);
+          font-family: var(--font-sans);
+        }
+        .ck-card {
+          position: absolute;
+          left: 110px;
+          width: 860px;
+          padding: 40px 48px 46px;
+          display: flex;
+          flex-direction: column;
+          border-radius: var(--card-radius);
+          background: var(--card-bg);
+          border: 2px solid var(--card-border);
+          box-shadow: 0 30px 90px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        }
+        .ck-kicker {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          align-self: flex-start;
+          padding: 9px 20px;
+          margin-bottom: 22px;
+          border: 2px solid rgba(var(--line-rgb), 0.45);
+          border-radius: 999px;
+          background: rgba(var(--stage-rgb), 0.55);
+          font-family: var(--font-mono);
+          font-size: 22px;
+          font-weight: 700;
+          letter-spacing: 0.14em;
+          color: var(--text-soft);
+          white-space: nowrap;
+        }
+        .ck-dot {
+          display: block;
+          width: 12px;
+          height: 12px;
+          border-radius: 50%;
+          background: var(--win);
+          box-shadow: 0 0 12px var(--win);
+        }
+        .ck-title {
+          display: block;
+          font-size: 64px;
+          font-weight: 850;
+          letter-spacing: -0.035em;
+          line-height: 1.04;
+        }
+        .ck-title .serif {
+          display: inline-block;
+          font-family: var(--font-serif);
+          font-style: italic;
+          font-weight: 400;
+          font-size: calc(1em * var(--serif-scale));
+          letter-spacing: 0;
+          line-height: 0.9;
+          color: var(--accent-text);
+        }
+        .ck-rule {
+          height: 2px;
+          margin: 30px 0 14px;
+          background: rgba(var(--line-rgb), 0.22);
+          transform-origin: 0% 50%;
+        }
+        .ck-row {
+          position: relative;
+          display: flex;
+          align-items: center;
+          gap: 26px;
+          padding: 18px 18px 18px 14px;
+          margin-top: 8px;
+          border-radius: 22px;
+        }
+        .ck-hl {
+          position: absolute;
+          inset: 0;
+          border-radius: 22px;
+          background: linear-gradient(90deg, color-mix(in oklab, var(--accent) 28%, transparent), color-mix(in oklab, var(--accent) 6%, transparent));
+          box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--accent) 55%, transparent);
+          transform-origin: 0% 50%;
+          opacity: 0;
+        }
+        .ck-box {
+          position: relative;
+          flex: 0 0 auto;
+          width: 66px;
+          height: 66px;
+          border-radius: 16px;
+          border: 4px solid rgba(var(--line-rgb), 0.55);
+        }
+        .ck-fill {
+          position: absolute;
+          inset: -4px;
+          border-radius: 16px;
+          background: var(--accent);
+          box-shadow: 0 0 26px color-mix(in oklab, var(--accent) 60%, transparent);
+          opacity: 0;
+        }
+        .ck-tick {
+          position: absolute;
+          inset: -4px;
+          width: 66px;
+          height: 66px;
+        }
+        .ck-tick path {
+          fill: none;
+          stroke: var(--accent-ink);
+          stroke-width: 7;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+        }
+        .ck-label {
+          position: relative;
+          display: block;
+          font-size: 42px;
+          font-weight: 800;
+          letter-spacing: -0.02em;
+          line-height: 1.1;
+          color: rgba(var(--text-rgb), 0.62);
+        }
+      </style>
+      <div id="root" data-composition-id="fx-checklist" data-width="1080" data-height="1440">
+        <div class="ck-card"></div>
+      </div>
+      <script>
+        (function () {
+          const root = document.querySelector('[data-composition-id="fx-checklist"]');
+          const v = window.__hyperframes.getVariables();
+          const brandTok = (n, f) => (getComputedStyle(root || document.documentElement).getPropertyValue(n).trim() || f);
+          const span = Math.max(0.1, Number(v.span) || 4);
+          function arr(s) {
+            try {
+              const x = JSON.parse(String(s || "[]"));
+              return Array.isArray(x) ? x : [];
+            } catch (err) {
+              return [];
+            }
+          }
+          function el(tag, cls, text) {
+            const e = document.createElement(tag);
+            if (cls) e.className = cls;
+            if (text !== undefined) e.textContent = text;
+            return e;
+          }
+          function richText(node, text) {
+            String(text || "")
+              .split(/(\*[^*]+\*)/)
+              .forEach(function (part) {
+                if (!part) return;
+                if (part.length > 2 && part.charAt(0) === "*" && part.charAt(part.length - 1) === "*") {
+                  node.appendChild(el("span", "serif", part.slice(1, -1)));
+                } else {
+                  node.appendChild(document.createTextNode(part));
+                }
+              });
+          }
+          const card = root.querySelector(".ck-card");
+          card.style.top = Math.max(0, Number(v.cardTop) || 330) + "px";
+          const kicker = el("div", "ck-kicker");
+          kicker.appendChild(el("i", "ck-dot"));
+          kicker.appendChild(el("span", "", String(v.kicker || "")));
+          if (!String(v.kicker || "")) kicker.style.display = "none";
+          card.appendChild(kicker);
+          const lines = String(v.title || "")
+            .split(" / ")
+            .filter(function (s) {
+              return s.trim() !== "";
+            })
+            .slice(0, 3)
+            .map(function (t) {
+              const l = el("span", "ck-title");
+              richText(l, t);
+              card.appendChild(l);
+              return l;
+            });
+          const rule = el("div", "ck-rule");
+          card.appendChild(rule);
+          const ticks = arr(v.ticks);
+          const rows = arr(v.items)
+            .slice(0, 4)
+            .map(function (text, i) {
+              const row = el("div", "ck-row");
+              const hl = el("div", "ck-hl");
+              const box = el("div", "ck-box");
+              const fill = el("i", "ck-fill");
+              const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+              svg.setAttribute("class", "ck-tick");
+              svg.setAttribute("viewBox", "0 0 66 66");
+              const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+              path.setAttribute("d", "M18 34 L28.5 44.5 L48 23");
+              path.setAttribute("stroke-dasharray", "46");
+              path.setAttribute("stroke-dashoffset", "46");
+              svg.appendChild(path);
+              box.appendChild(fill);
+              box.appendChild(svg);
+              const label = el("span", "ck-label", String(text !== null && typeof text === "object" ? text.text || "" : text));
+              row.appendChild(hl);
+              row.appendChild(box);
+              row.appendChild(label);
+              card.appendChild(row);
+              const t = Number.isFinite(Number(ticks[i])) && ticks[i] !== null ? Math.max(0, Number(ticks[i])) : 1 + i;
+              return { row: row, hl: hl, box: box, fill: fill, path: path, label: label, t: t };
+            });
+
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(card, { y: 60, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, 0.0);
+          tl.fromTo(kicker, { scale: 0.92, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.2, ease: "power2.out" }, 0.08);
+          lines.forEach(function (l, i) {
+            tl.fromTo(l, { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, 0.12 + i * 0.08);
+          });
+          const showAt = Math.max(0, Number(v.showAt) || 0);
+          tl.fromTo(rule, { scaleX: 0 }, { scaleX: 1, duration: 0.4, ease: "power3.inOut" }, showAt);
+          rows.forEach(function (r, i) {
+            tl.fromTo(r.row, { x: -24, opacity: 0 }, { x: 0, opacity: 1, duration: 0.35, ease: "power2.out" }, showAt + 0.08 + i * 0.08);
+            if (r.t >= span) return;
+            // tick: box pops and fills, the tick draws, highlight sweeps, label brightens
+            tl.fromTo(r.box, { scale: 1 }, { scale: 1.14, duration: 0.12, ease: "power3.out", yoyo: true, repeat: 1, immediateRender: false }, r.t);
+            tl.fromTo(r.fill, { scale: 0.4, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.24, ease: "back.out(2.4)" }, r.t);
+            tl.fromTo(r.path, { attr: { "stroke-dashoffset": 46 } }, { attr: { "stroke-dashoffset": 0 }, duration: 0.24, ease: "power2.out" }, r.t + 0.08);
+            tl.fromTo(r.hl, { scaleX: 0, opacity: 1 }, { scaleX: 1, opacity: 1, duration: 0.3, ease: "power3.inOut" }, r.t + 0.04);
+            tl.to(r.label, { color: brandTok("--text", "#ffffff"), duration: 0.2 }, r.t + 0.06);
+            // the highlight hands over to the next row when it ticks
+            const next = rows[i + 1];
+            if (next && next.t < span) tl.to(r.hl, { opacity: 0, duration: 0.25, ease: "power2.out" }, next.t);
+          });
+          // idle life: the card floats once everything has landed
+          const settle = Math.max(showAt + 0.6, 0.6);
+          if (span - settle > 1.8) {
+            const reps = Math.max(0, Math.floor((span - settle) / 0.9) - 1);
+            tl.fromTo(card, { y: 0 }, { y: -10, duration: 0.9, ease: "sine.inOut", yoyo: true, repeat: reps, immediateRender: false }, settle);
+          }
+          window.__timelines["fx-checklist"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

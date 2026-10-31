@@ -1,0 +1,411 @@
+<!doctype html>
+<!--
+  table (scene 4): dark card, rows x columns, highlight sweep down the rows on the words,
+  optional "IN THE GUIDE" locks (lead-magnet tease).
+  Card lives in x 150-930 (right rail safe), y 500-1170.
+  Variables:
+    heading ("line / line", one *serif* word), span,
+    columns (JSON): [{name, img}]            1-3 columns; img optional (logo mini tile)
+    rows (JSON): [{label, t, cells: [cell, ...]}]   t = scene-local highlight time (s)
+      cell = {text, tone: muted|win|burn|accent} | {lock: "IN THE GUIDE"} | {bar: true}
+    dimAt (s, 0 = never): card dims to 0.7 (a stamp is about to land on it)
+    shakeAt (s, 0 = never): 4-frame shake (the stamp hit)
+-->
+<html
+  lang="en"
+  data-composition-variables='[
+    {"id":"heading","type":"string","label":"Heading (/ = new line, *serif*)","default":"Two *options* compared"},
+    {"id":"columns","type":"string","label":"Columns (JSON)","default":"[]"},
+    {"id":"rows","type":"string","label":"Rows (JSON)","default":"[]"},
+    {"id":"dimAt","type":"number","label":"Dim at (s)","default":0,"min":0},
+    {"id":"shakeAt","type":"number","label":"Shake at (s)","default":0,"min":0},
+    {"id":"span","type":"number","label":"Host length (s)","default":6,"min":0.1}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          color: var(--text);
+          font-family: var(--font-sans);
+        }
+        .tb-head {
+          position: absolute;
+          left: var(--safe-left);
+          right: var(--safe-right-upper);
+          top: var(--hook-top);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+        }
+        .tb-line {
+          display: block;
+          font-size: 80px;
+          font-weight: 850;
+          letter-spacing: -0.04em;
+          line-height: 1.02;
+        }
+        .tb-line .serif {
+          display: inline-block;
+          font-family: var(--font-serif);
+          font-style: italic;
+          font-weight: 400;
+          font-size: calc(1em * var(--serif-scale));
+          letter-spacing: 0;
+          line-height: 0.9;
+        }
+        .tb-card {
+          position: absolute;
+          left: 150px;
+          width: 780px;
+          top: 500px;
+          height: 670px;
+          padding: 22px 22px 26px;
+          border-radius: var(--card-radius);
+          background: var(--card-bg);
+          border: 2px solid var(--card-border);
+          box-shadow: 0 40px 120px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+          opacity: 0;
+        }
+        .tb-grid-head,
+        .tb-row {
+          display: grid;
+          align-items: center;
+        }
+        .tb-grid-head {
+          height: 130px;
+          border-bottom: 2px solid rgba(var(--line-rgb), 0.18);
+        }
+        .tb-col {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 8px;
+          opacity: 0;
+        }
+        .tb-mini {
+          display: block;
+          height: 70px;
+          width: 124px;
+          border-radius: 14px;
+          object-fit: contain;
+          background: #020409;
+          border: 1px solid rgba(255, 255, 255, 0.14);
+        }
+        .tb-col-name {
+          display: block;
+          font-size: 26px;
+          font-weight: 750;
+          white-space: nowrap;
+        }
+        .tb-rows {
+          position: relative;
+        }
+        .tb-hl {
+          position: absolute;
+          left: -10px;
+          right: -10px;
+          top: 0;
+          border-radius: 22px;
+          background: linear-gradient(90deg, color-mix(in oklab, var(--accent) 30%, transparent), color-mix(in oklab, var(--accent) 10%, transparent));
+          border: 2px solid color-mix(in oklab, var(--accent) 70%, transparent);
+          opacity: 0;
+        }
+        .tb-row {
+          position: relative;
+          border-bottom: 2px solid rgba(var(--line-rgb), 0.12);
+          opacity: 0;
+        }
+        .tb-row:last-child {
+          border-bottom: none;
+        }
+        .tb-label {
+          display: block;
+          padding-left: 16px;
+          font-size: 38px;
+          font-weight: 750;
+          letter-spacing: -0.02em;
+          color: var(--muted);
+          white-space: nowrap;
+        }
+        .tb-cell {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          height: 100%;
+        }
+        .tb-val {
+          display: block;
+          padding: 9px 18px;
+          border-radius: 999px;
+          font-family: var(--font-mono);
+          font-size: 22px;
+          font-weight: 800;
+          letter-spacing: 0.1em;
+          white-space: nowrap;
+          border: 2px solid rgba(var(--text-rgb), 0.5);
+          color: var(--text-soft);
+          opacity: 0;
+        }
+        .tb-val.win {
+          border-color: var(--win);
+          color: var(--win);
+          background: rgba(var(--win-rgb), 0.1);
+        }
+        .tb-val.burn {
+          border-color: color-mix(in srgb, var(--burn-2) 75%, #ffffff);
+          color: color-mix(in srgb, var(--burn-2) 40%, #ffffff);
+          background: rgba(var(--burn-rgb), 0.14);
+        }
+        .tb-val.accent {
+          border-color: var(--accent);
+          color: var(--accent-text);
+          background: color-mix(in oklab, var(--accent) 12%, transparent);
+        }
+        .tb-bar {
+          display: block;
+          height: 16px;
+          border-radius: 999px;
+          filter: blur(2px);
+          width: 110px;
+          background: rgba(var(--text-rgb), 0.55);
+        }
+        .tb-bar.short {
+          width: 76px;
+          opacity: 0.45;
+        }
+        .tb-lock {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          margin-top: -24px;
+          margin-left: -98px;
+          width: 196px;
+          height: 48px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          border-radius: 999px;
+          background: var(--text);
+          color: var(--plate-ink);
+          font-family: var(--font-mono);
+          font-size: 17px;
+          font-weight: 800;
+          letter-spacing: 0.1em;
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+          opacity: 0;
+        }
+        .tb-lock svg {
+          display: block;
+          width: 18px;
+          height: 18px;
+        }
+      </style>
+      <div id="root" data-composition-id="table" data-width="1080" data-height="1440">
+        <div class="tb-head"></div>
+        <div class="tb-card">
+          <div class="tb-grid-head"></div>
+          <div class="tb-rows"><div class="tb-hl"></div></div>
+        </div>
+      </div>
+      <script>
+        (function () {
+          const root = document.querySelector('[data-composition-id="table"]');
+          const v = window.__hyperframes.getVariables();
+          const brandTok = (n, f) => (getComputedStyle(root || document.documentElement).getPropertyValue(n).trim() || f);
+          const span = Math.max(0.1, Number(v.span) || 6);
+          function parse(s) {
+            try {
+              const x = JSON.parse(String(s || "[]"));
+              return Array.isArray(x) ? x : [];
+            } catch (err) {
+              return [];
+            }
+          }
+          function richText(el, text) {
+            String(text || "")
+              .split(/(\*[^*]+\*)/)
+              .forEach(function (part) {
+                if (!part) return;
+                if (part.length > 2 && part.charAt(0) === "*" && part.charAt(part.length - 1) === "*") {
+                  const s = document.createElement("span");
+                  s.className = "serif";
+                  s.textContent = part.slice(1, -1);
+                  el.appendChild(s);
+                } else {
+                  el.appendChild(document.createTextNode(part));
+                }
+              });
+          }
+          const columns = parse(v.columns).slice(0, 3);
+          const rows = parse(v.rows).slice(0, 5);
+          const nc = Math.max(1, columns.length);
+          const template = (nc === 1 ? "330px" : "250px") + " repeat(" + nc + ", 1fr)";
+
+          const head = root.querySelector(".tb-head");
+          const lineEls = String(v.heading || "")
+            .split(" / ")
+            .filter(function (s) {
+              return s.trim() !== "";
+            })
+            .slice(0, 2)
+            .map(function (txt) {
+              const el = document.createElement("span");
+              el.className = "tb-line";
+              richText(el, txt);
+              head.appendChild(el);
+              return el;
+            });
+
+          const gh = root.querySelector(".tb-grid-head");
+          gh.style.gridTemplateColumns = template;
+          gh.appendChild(document.createElement("span"));
+          const colEls = columns.map(function (c) {
+            const el = document.createElement("div");
+            el.className = "tb-col";
+            if (c.img) {
+              const img = document.createElement("img");
+              img.className = "tb-mini";
+              img.setAttribute("src", String(c.img));
+              img.setAttribute("alt", "");
+              el.appendChild(img);
+            }
+            const nm = document.createElement("span");
+            nm.className = "tb-col-name";
+            nm.textContent = String(c.name || "");
+            el.appendChild(nm);
+            gh.appendChild(el);
+            return el;
+          });
+
+          const lockSvg = "M7 10V7a5 5 0 0 1 10 0v3h1a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V11a1 1 0 0 1 1-1h1zm2 0h6V7a3 3 0 0 0-6 0v3z";
+          const rowsBox = root.querySelector(".tb-rows");
+          const rowH = Math.floor((670 - 48 - 130) / Math.max(1, rows.length));
+          const hl = root.querySelector(".tb-hl");
+          hl.style.height = rowH + "px";
+          const rowEls = rows.map(function (r) {
+            const row = document.createElement("div");
+            row.className = "tb-row";
+            row.style.gridTemplateColumns = template;
+            row.style.height = rowH + "px";
+            const lab = document.createElement("span");
+            lab.className = "tb-label";
+            lab.textContent = String(r.label || "");
+            row.appendChild(lab);
+            const cells = Array.isArray(r.cells) ? r.cells : [];
+            const reveal = [];
+            for (let i = 0; i < nc; i++) {
+              const c = cells[i] || {};
+              const cell = document.createElement("div");
+              cell.className = "tb-cell";
+              if (c.lock) {
+                const b1 = document.createElement("span");
+                b1.className = "tb-bar";
+                const b2 = document.createElement("span");
+                b2.className = "tb-bar short";
+                const lock = document.createElement("div");
+                lock.className = "tb-lock";
+                const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                svg.setAttribute("viewBox", "0 0 24 24");
+                svg.setAttribute("fill", brandTok("--plate-ink", "#111111"));
+                const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                path.setAttribute("d", lockSvg);
+                svg.appendChild(path);
+                lock.appendChild(svg);
+                lock.appendChild(document.createTextNode(String(c.lock)));
+                cell.appendChild(b1);
+                cell.appendChild(b2);
+                cell.appendChild(lock);
+                reveal.push(lock);
+              } else if (c.bar) {
+                const b1 = document.createElement("span");
+                b1.className = "tb-bar";
+                const b2 = document.createElement("span");
+                b2.className = "tb-bar short";
+                cell.appendChild(b1);
+                cell.appendChild(b2);
+              } else {
+                const val = document.createElement("span");
+                const tone = ["win", "burn", "accent"].indexOf(c.tone) >= 0 ? " " + c.tone : "";
+                val.className = "tb-val" + tone;
+                val.textContent = String(c.text || "");
+                cell.appendChild(val);
+                reveal.push(val);
+              }
+              row.appendChild(cell);
+            }
+            rowsBox.appendChild(row);
+            return { row: row, label: lab, reveal: reveal, t: Math.max(0, Number(r.t) || 0) };
+          });
+
+          const card = root.querySelector(".tb-card");
+          const tl = gsap.timeline({ paused: true });
+          lineEls.forEach(function (el, i) {
+            tl.fromTo(el, { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, 0.04 + i * 0.08);
+          });
+          tl.fromTo(card, { y: 120, opacity: 0 }, { y: 0, opacity: 1, duration: 0.55, ease: "power3.out" }, 0.1);
+          if (colEls.length) {
+            tl.fromTo(colEls, { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "back.out(1.8)", stagger: 0.08 }, 0.3);
+          }
+          if (rowEls.length) {
+            tl.fromTo(
+              rowEls.map(function (r) {
+                return r.row;
+              }),
+              { x: -30, opacity: 0 },
+              { x: 0, opacity: 1, duration: 0.35, ease: "power2.out", stagger: 0.07 },
+              0.36,
+            );
+          }
+          // highlight sweeps down as each row is said; values pop in on their row
+          rowEls.forEach(function (r, i) {
+            if (i === 0) {
+              tl.fromTo(hl, { opacity: 0, y: 0 }, { opacity: 1, duration: 0.2, ease: "power2.out" }, Math.max(0, r.t - 0.05));
+            } else {
+              tl.to(hl, { y: i * rowH, duration: 0.3, ease: "power3.inOut" }, Math.max(0, r.t - 0.15));
+            }
+            tl.to(r.label, { color: brandTok("--text", "#ffffff"), duration: 0.2 }, r.t);
+            if (r.reveal.length) {
+              tl.fromTo(r.reveal, { scale: 0.5, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.3, ease: "back.out(2.4)", stagger: 0.06 }, r.t + 0.08);
+            }
+          });
+          const dimAt = Math.max(0, Number(v.dimAt) || 0);
+          if (dimAt > 0) {
+            // a stamp is about to land on this card: its rows are meant to be covered
+            rowEls.forEach(function (r) {
+              r.label.setAttribute("data-layout-allow-occlusion", "");
+              r.reveal.forEach(function (el) {
+                el.setAttribute("data-layout-allow-occlusion", "");
+              });
+            });
+            tl.to(hl, { opacity: 0, duration: 0.25 }, dimAt);
+            tl.to(card, { opacity: 0.7, duration: 0.3 }, dimAt);
+          }
+          const shakeAt = Math.max(0, Number(v.shakeAt) || 0);
+          if (shakeAt > 0) {
+            tl.fromTo(card, { x: 0 }, { keyframes: [{ x: -14, duration: 0.033 }, { x: 12, duration: 0.033 }, { x: -8, duration: 0.033 }, { x: 0, duration: 0.033 }], immediateRender: false }, shakeAt);
+          }
+          // idle life: the active highlight breathes while the last row holds
+          const lastT = rowEls.length ? rowEls[rowEls.length - 1].t + 0.4 : 1;
+          const holdEnd = dimAt > 0 ? dimAt : span;
+          const reps = Math.floor((holdEnd - lastT) / 0.9) - 1;
+          if (rowEls.length && reps >= 0) {
+            tl.fromTo(hl, { opacity: 1 }, { opacity: 0.7, duration: 0.9, ease: "sine.inOut", yoyo: true, repeat: reps, immediateRender: false }, lastT);
+          }
+          window.__timelines["table"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

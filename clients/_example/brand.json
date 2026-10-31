@@ -1,0 +1,85 @@
+{
+  "name": "_example",
+  "_about": "EMPTY on purpose. Copy this folder to clients/<client-name>/ and let DESIGN-INTERVIEW.md fill every value from the client's answers. Every token must be set before the build will run; the build lists anything still empty. What each token means: clients/_example/BRAND.md and the comments in src/shell.html.",
+  "tokens": {
+    "--stage": "",
+    "--stage-glow-1": "",
+    "--stage-glow-2": "",
+    "--stage-haze": "",
+    "--grid": "",
+    "--glow": "",
+    "--line": "",
+    "--pill-bg": "",
+    "--accent": "",
+    "--accent-ink": "",
+    "--accent-text": "",
+    "--text": "",
+    "--text-soft": "",
+    "--muted": "",
+    "--win": "",
+    "--burn-1": "",
+    "--burn-2": "",
+    "--card-bg": "",
+    "--card-border": "",
+    "--card-radius": "",
+    "--plate": "",
+    "--plate-2": "",
+    "--plate-ink": "",
+    "--plate-muted": "",
+    "--plate-radius": "",
+    "--plate-shadow": "",
+    "--title-size": "",
+    "--serif-scale": "",
+    "--caption-style": "",
+    "--caption-max-words": "",
+    "--caption-size": "",
+    "--caption-weight": "",
+    "--caption-tracking": "",
+    "--caption-fg": "",
+    "--caption-bg": "",
+    "--caption-radius": "",
+    "--caption-pad": "",
+    "--bigword-size": "",
+    "--bigword-fg": "",
+    "--bigword-shadow": "",
+    "--face-radius": "",
+    "--face-hairline": "",
+    "--face-glow": "",
+    "--pip-ring": "",
+    "--proof-split": "",
+    "--grade-intensity": ""
+  },
+  "fonts": {
+    "sans": {
+      "family": "",
+      "fallback": "sans-serif",
+      "files": []
+    },
+    "mono": {
+      "family": "",
+      "fallback": "monospace",
+      "files": []
+    },
+    "serif": {
+      "family": "",
+      "fallback": "serif",
+      "files": []
+    }
+  },
+  "_fonts_help": "files: [{\"src\": \"clients/<name>/fonts/File.ttf\", \"weight\": \"400\" or \"100 900\", \"style\": \"normal\" or \"italic\"}]. Only fonts whose licence allows embedding in video; keep the licence file next to the font.",
+  "grade": {},
+  "_grade_help": "Optional footage grade: a HyperFrames data-color-grading payload without intensity, e.g. {\"preset\": \"<preset name>\", \"adjust\": {...}}. Leave {} and set --grade-intensity to 0 for ungraded footage. Presets and safe ranges: the HyperFrames color-grading docs.",
+  "cta": {
+    "dmName": "",
+    "dmAvatar": "",
+    "footerLogo": "",
+    "footerText": "",
+    "coverLogo": ""
+  },
+  "_cta_help": "Defaults for the closing scenes. Image paths are relative to the kit folder, e.g. clients/<name>/logo.png. Leave a value empty to leave it out.",
+  "audio": {
+    "sfx": true,
+    "voiceEq": true
+  },
+  "_audio_help": "sfx: sound effects on the beats. voiceEq: the presence EQ after DeepFilterNet (turn off for an already-bright voice)."
+}

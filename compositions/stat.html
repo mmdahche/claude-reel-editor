@@ -1,0 +1,204 @@
+<!doctype html>
+<!--
+  stat (scene 5): one hero number ticking up inside a ring that draws on, with a mono
+  label pill. Tone: win (green, things going right), burn (stakes), accent.
+  The count is precomputed per frame and set with tl.set, so any seek shows the same
+  digit (technique borrowed from the registry count-up component).
+  Variables: kicker, value, from, prefix, suffix, label, tone (win|burn|accent),
+             countAt (s), countDur (s), span (s).
+-->
+<html
+  lang="en"
+  data-composition-variables='[
+    {"id":"kicker","type":"string","label":"Kicker","default":""},
+    {"id":"value","type":"number","label":"Value","default":100},
+    {"id":"from","type":"number","label":"Count from","default":0},
+    {"id":"prefix","type":"string","label":"Prefix","default":""},
+    {"id":"suffix","type":"string","label":"Suffix","default":""},
+    {"id":"label","type":"string","label":"Label","default":"TESTS PASSED"},
+    {"id":"tone","type":"enum","label":"Tone","default":"win","options":[{"value":"win","label":"Win"},{"value":"burn","label":"Burn"},{"value":"accent","label":"Accent"}]},
+    {"id":"countAt","type":"number","label":"Count starts (s)","default":0.15,"min":0},
+    {"id":"countDur","type":"number","label":"Count length (s)","default":1.1,"min":0.1},
+    {"id":"span","type":"number","label":"Host length (s)","default":3,"min":0.1}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          color: var(--text);
+          font-family: var(--font-sans);
+          --st-tone: var(--win);
+        }
+        .st-kicker {
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: var(--hook-top);
+          display: flex;
+          justify-content: center;
+        }
+        .st-kicker span {
+          display: block;
+          padding: 10px 22px;
+          border: 2px solid rgba(var(--line-rgb), 0.45);
+          border-radius: 999px;
+          font-family: var(--font-mono);
+          font-size: 23px;
+          font-weight: 700;
+          letter-spacing: 0.16em;
+          color: var(--text-soft);
+          white-space: nowrap;
+        }
+        .st-ring-box {
+          position: absolute;
+          left: 240px;
+          top: 380px;
+          width: 600px;
+          height: 600px;
+        }
+        .st-glow {
+          position: absolute;
+          inset: 60px;
+          border-radius: 50%;
+          background: radial-gradient(closest-side, var(--st-tone), rgba(0, 0, 0, 0));
+          opacity: 0;
+        }
+        .st-ring {
+          position: absolute;
+          inset: 0;
+          width: 600px;
+          height: 600px;
+        }
+        .st-track {
+          fill: none;
+          stroke: rgba(var(--line-rgb), 0.16);
+          stroke-width: 18;
+        }
+        .st-arc {
+          fill: none;
+          stroke: var(--st-tone);
+          stroke-width: 18;
+          stroke-linecap: round;
+        }
+        .st-num {
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 0;
+          bottom: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 200px;
+          font-weight: 900;
+          letter-spacing: -0.05em;
+          font-variant-numeric: tabular-nums;
+          line-height: 1;
+          color: var(--text);
+          text-shadow: 0 0 40px rgba(0, 0, 0, 0.35);
+        }
+        .st-affix {
+          font-size: 0.42em;
+          font-weight: 800;
+          letter-spacing: -0.02em;
+          color: var(--st-tone);
+        }
+        .st-label {
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 1030px;
+          display: flex;
+          justify-content: center;
+        }
+        .st-label span {
+          display: block;
+          padding: 12px 24px;
+          border-radius: 999px;
+          background: var(--st-tone);
+          color: var(--accent-ink);
+          font-family: var(--font-mono);
+          font-size: 26px;
+          font-weight: 800;
+          letter-spacing: 0.12em;
+          white-space: nowrap;
+        }
+      </style>
+      <div id="root" data-composition-id="stat" data-width="1080" data-height="1440">
+        <div class="st-kicker"><span></span></div>
+        <div class="st-ring-box">
+          <div class="st-glow"></div>
+          <svg class="st-ring" viewBox="0 0 600 600" aria-hidden="true">
+            <circle class="st-track" cx="300" cy="300" r="270" />
+            <circle class="st-arc" cx="300" cy="300" r="270" transform="rotate(-90 300 300)" />
+          </svg>
+          <div class="st-num"><span class="st-affix st-prefix"></span><span class="st-val">0</span><span class="st-affix st-suffix"></span></div>
+        </div>
+        <div class="st-label"><span></span></div>
+      </div>
+      <script>
+        (function () {
+          const root = document.querySelector('[data-composition-id="stat"]');
+          const v = window.__hyperframes.getVariables();
+          const span = Math.max(0.1, Number(v.span) || 3);
+          const toneMap = { win: "var(--win)", burn: "var(--burn-2)", accent: "var(--accent)" };
+          root.style.setProperty("--st-tone", toneMap[v.tone] || toneMap.win);
+
+          const kickerBox = root.querySelector(".st-kicker");
+          kickerBox.querySelector("span").textContent = String(v.kicker || "");
+          if (!String(v.kicker || "")) kickerBox.style.display = "none";
+          const labelBox = root.querySelector(".st-label");
+          labelBox.querySelector("span").textContent = String(v.label || "");
+          if (!String(v.label || "")) labelBox.style.display = "none";
+          root.querySelector(".st-prefix").textContent = String(v.prefix || "");
+          root.querySelector(".st-suffix").textContent = String(v.suffix || "");
+
+          const end = Number.isFinite(Number(v.value)) ? Number(v.value) : 100;
+          const start = Number.isFinite(Number(v.from)) ? Number(v.from) : 0;
+          const countAt = Math.max(0, Number(v.countAt) || 0);
+          const countDur = Math.max(0.1, Number(v.countDur) || 1.1);
+          const valEl = root.querySelector(".st-val");
+          const arc = root.querySelector(".st-arc");
+          const circ = 2 * Math.PI * 270;
+          arc.setAttribute("stroke-dasharray", String(circ));
+
+          const fmt = function (n) {
+            return Math.round(n).toLocaleString("en-US");
+          };
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(kickerBox, { scale: 0.92, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.2, ease: "power2.out" }, 0.02);
+          tl.fromTo(root.querySelector(".st-ring-box"), { scale: 0.86, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.45, ease: "power3.out" }, 0.04);
+          tl.fromTo(arc, { attr: { "stroke-dashoffset": circ } }, { attr: { "stroke-dashoffset": 0 }, duration: countDur, ease: "power2.inOut" }, countAt);
+
+          // per-frame digits, deterministic under any seek
+          const frames = Math.max(1, Math.round(countDur * 30));
+          const ease = gsap.parseEase("power2.out");
+          valEl.textContent = fmt(start);
+          for (let f = 0; f <= frames; f++) {
+            tl.set(valEl, { textContent: fmt(start + (end - start) * ease(f / frames)) }, countAt + (countDur * f) / frames);
+          }
+          const land = countAt + countDur;
+          const num = root.querySelector(".st-num");
+          tl.to(num, { scale: 1.07, duration: 0.16, ease: "power3.out" }, land);
+          tl.to(num, { scale: 1, duration: 0.16, ease: "power2.out" }, land + 0.16);
+          tl.fromTo(root.querySelector(".st-glow"), { opacity: 0 }, { opacity: 0.35, duration: 0.3, ease: "power2.out" }, land);
+          tl.fromTo(labelBox, { scale: 0.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.35, ease: "back.out(2.2)" }, land - 0.1);
+          // idle life: the glow breathes while the number holds
+          const breathe = 0.9;
+          const reps = Math.floor((span - (land + 0.3)) / breathe) - 1;
+          if (reps >= 0) {
+            tl.to(root.querySelector(".st-glow"), { opacity: 0.18, duration: breathe, ease: "sine.inOut", yoyo: true, repeat: reps }, land + 0.3);
+          }
+          window.__timelines["stat"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

@@ -1,0 +1,138 @@
+<!doctype html>
+<!--
+  screen-frame (scene 7 / A2 fallback): the frame around real footage or a screen capture.
+  The media itself is NOT in this file: the build places a root-level <video>/<img> inside
+  the screen rect (static timing = seek-safe frame extraction) and mirrors this scene's
+  entrance tween on it. This scene draws:
+    device "card"  -> dark card with hairline (desktop UI, camera footage)
+    device "phone" -> phone bezel (phone screen recordings: never full-bleed)
+    lightPlate     -> light plate behind the device (white device mockup look on the stage)
+  Variable ids must never equal a :root token name: HyperFrames sets every scalar variable
+  as --<id> on this root, which would override the token (a variable named plate broke --plate).
+    label          -> mono callout pill under the frame
+  Variables: device, lightPlate, label, screenX, screenY, screenW, screenH (px in the host),
+             enterAt (s), span (s).
+-->
+<html
+  lang="en"
+  data-composition-variables='[
+    {"id":"device","type":"enum","label":"Device","default":"card","options":[{"value":"card","label":"Dark card"},{"value":"phone","label":"Phone"}]},
+    {"id":"lightPlate","type":"boolean","label":"Light plate","default":false},
+    {"id":"label","type":"string","label":"Callout","default":""},
+    {"id":"screenX","type":"number","label":"Screen x","default":290},
+    {"id":"screenY","type":"number","label":"Screen y","default":330},
+    {"id":"screenW","type":"number","label":"Screen w","default":500},
+    {"id":"screenH","type":"number","label":"Screen h","default":780},
+    {"id":"enterAt","type":"number","label":"Enter at (s)","default":0.05,"min":0},
+    {"id":"span","type":"number","label":"Host length (s)","default":4,"min":0.1}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          font-family: var(--font-sans);
+        }
+        .sf-frame {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 1080px;
+          height: 1440px;
+          opacity: 0;
+        }
+        .sf-plate {
+          position: absolute;
+          border-radius: var(--plate-radius);
+          background: var(--plate);
+          border: 1px solid rgba(0, 0, 0, 0.08);
+          box-shadow: var(--plate-shadow);
+        }
+        .sf-card {
+          position: absolute;
+          border-radius: calc(var(--card-radius) + 4px);
+          background: var(--card-bg);
+          border: 2px solid var(--card-border);
+          box-shadow: 0 40px 120px rgba(0, 0, 0, 0.55), 0 0 60px rgba(var(--accent-rgb), 0.18);
+        }
+        .sf-phone {
+          position: absolute;
+          border-radius: 70px;
+          background: #0b0d12;
+          border: 2px solid rgba(255, 255, 255, 0.14);
+          box-shadow: 0 40px 120px rgba(0, 0, 0, 0.55);
+        }
+        .sf-label {
+          position: absolute;
+          left: 150px;
+          width: 780px;
+          display: flex;
+          justify-content: center;
+        }
+        .sf-label span {
+          display: block;
+          padding: 10px 20px;
+          border-radius: 999px;
+          background: rgba(var(--stage-rgb), 0.85);
+          border: 1px solid rgba(255, 255, 255, 0.16);
+          font-family: var(--font-mono);
+          font-size: 22px;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          color: var(--text);
+          white-space: nowrap;
+        }
+      </style>
+      <div id="root" data-composition-id="screen-frame" data-width="1080" data-height="1440">
+        <div class="sf-frame"></div>
+      </div>
+      <script>
+        (function () {
+          const root = document.querySelector('[data-composition-id="screen-frame"]');
+          const v = window.__hyperframes.getVariables();
+          const sx = Number(v.screenX) || 0;
+          const sy = Number(v.screenY) || 0;
+          const sw = Math.max(10, Number(v.screenW) || 500);
+          const sh = Math.max(10, Number(v.screenH) || 780);
+          const frame = root.querySelector(".sf-frame");
+          function box(cls, pad) {
+            const el = document.createElement("div");
+            el.className = cls;
+            el.style.left = sx - pad + "px";
+            el.style.top = sy - pad + "px";
+            el.style.width = sw + pad * 2 + "px";
+            el.style.height = sh + pad * 2 + "px";
+            frame.appendChild(el);
+            return el;
+          }
+          const isPhone = v.device === "phone";
+          const bezel = isPhone ? 16 : 4;
+          if (v.lightPlate === true || v.lightPlate === "true") box("sf-plate", bezel + 36);
+          box(isPhone ? "sf-phone" : "sf-card", bezel);
+          const labelText = String(v.label || "");
+          if (labelText) {
+            const lab = document.createElement("div");
+            lab.className = "sf-label";
+            const below = v.lightPlate === true || v.lightPlate === "true" ? 36 + 18 : 26;
+            lab.style.top = Math.min(1124, sy + sh + bezel + below) + "px";
+            const s = document.createElement("span");
+            s.textContent = labelText;
+            lab.appendChild(s);
+            frame.appendChild(lab);
+          }
+          const enterAt = Math.max(0, Number(v.enterAt) || 0);
+          const tl = gsap.timeline({ paused: true });
+          // the build applies this exact tween to the media wrapper at global time
+          tl.fromTo(frame, { y: 60, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, enterAt);
+          window.__timelines["screen-frame"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

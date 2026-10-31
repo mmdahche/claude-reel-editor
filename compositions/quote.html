@@ -1,0 +1,420 @@
+<!doctype html>
+<!--
+  quote (scene 8): a quote / post / DM on a light plate sitting on the dark stage
+  (a light plate inside the dark stage). Avatar circle (image, or initials on the stage glow)
+  with an accent ring, name in the sans at 800, handle in mono, the text, a mono meta line. The key
+  phrase gets an accent highlighter sweep on the beat it is said. The plate keeps a slow 2deg
+  parallax tilt while it holds (idle life).
+    kind "post" -> tweet / announcement anatomy (header, body, meta row)
+    kind "dm"   -> DM thread: text split on " / " into incoming bubbles that pop in one by one
+                    (a chat-thread look); the highlight lands in whichever bubble has it
+  Layout: optional kicker + heading from --hook-top; the plate is centred in the
+  right-rail-safe band (x 150-930 with the default tokens) and ends above --content-bottom.
+  Variables:
+    kicker, heading ("line / line", one *serif* word), kind (post|dm), name, handle,
+    avatar (image path, "" = initials), text (<= ~200 chars), highlight (exact substring),
+    highlightAt (s, 0 = auto), meta (mono line under the text, e.g. "OCT 9 / 7:42 AM"), span
+-->
+<html
+  lang="en"
+  data-composition-variables='[
+    {"id":"kicker","type":"string","label":"Kicker","default":""},
+    {"id":"heading","type":"string","label":"Heading (/ = new line, *serif*)","default":""},
+    {"id":"kind","type":"enum","label":"Kind","default":"post","options":[{"value":"post","label":"Post / quote"},{"value":"dm","label":"DM thread"}]},
+    {"id":"name","type":"string","label":"Name","default":"Someone"},
+    {"id":"handle","type":"string","label":"Handle","default":"@someone"},
+    {"id":"avatar","type":"string","label":"Avatar image","default":""},
+    {"id":"text","type":"string","label":"Text (dm: / = new bubble)","default":"This changed how I work."},
+    {"id":"highlight","type":"string","label":"Highlight (substring)","default":"how I work"},
+    {"id":"highlightAt","type":"number","label":"Highlight at (s, 0 = auto)","default":0,"min":0},
+    {"id":"meta","type":"string","label":"Meta line","default":""},
+    {"id":"span","type":"number","label":"Host length (s)","default":3,"min":0.1}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          color: var(--text);
+          font-family: var(--font-sans);
+        }
+        .qt-head {
+          position: absolute;
+          left: var(--safe-left);
+          right: var(--safe-right-upper);
+          top: var(--hook-top);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+        }
+        .qt-kicker {
+          display: block;
+          padding: 10px 22px;
+          margin-bottom: 18px;
+          border: 2px solid rgba(var(--line-rgb), 0.45);
+          border-radius: 999px;
+          font-family: var(--font-mono);
+          font-size: 23px;
+          font-weight: 700;
+          letter-spacing: 0.16em;
+          color: var(--text-soft);
+          white-space: nowrap;
+        }
+        .qt-line {
+          display: block;
+          font-size: 82px;
+          font-weight: 850;
+          letter-spacing: -0.04em;
+          line-height: 1.02;
+        }
+        .qt-line .serif {
+          display: inline-block;
+          font-family: var(--font-serif);
+          font-style: italic;
+          font-weight: 400;
+          font-size: calc(1em * var(--serif-scale));
+          letter-spacing: 0;
+          line-height: 0.9;
+        }
+        /* the card sits a little above centre in the space under the heading (35 / 65) */
+        .qt-zone {
+          position: absolute;
+          display: flex;
+          flex-direction: column;
+        }
+        .qt-zone::before {
+          content: "";
+          flex: 35 1 0;
+        }
+        .qt-zone::after {
+          content: "";
+          flex: 65 1 0;
+        }
+        .qt-plate {
+          position: relative;
+          width: 100%;
+          flex: none;
+          padding: 40px 44px 34px;
+          border-radius: var(--plate-radius);
+          background: var(--plate);
+          border: 1px solid rgba(0, 0, 0, 0.08);
+          box-shadow: var(--plate-shadow);
+          color: var(--plate-ink);
+          transform-origin: 50% 60%;
+          opacity: 0;
+        }
+        .qt-who {
+          display: flex;
+          align-items: center;
+          gap: 22px;
+        }
+        .qt-av {
+          position: relative;
+          display: block;
+          flex: 0 0 auto;
+          border-radius: 50%;
+          overflow: hidden;
+          box-shadow: 0 0 0 3px var(--plate), 0 0 0 6px var(--accent);
+        }
+        .qt-av img {
+          display: block;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        .qt-initials {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 100%;
+          height: 100%;
+          background: radial-gradient(circle at 50% 30%, var(--stage-glow-1) 0%, var(--stage) 85%);
+          color: #ffffff;
+          font-weight: 800;
+          letter-spacing: -0.02em;
+        }
+        .qt-names {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          min-width: 0;
+        }
+        .qt-name {
+          display: block;
+          font-size: 36px;
+          font-weight: 800;
+          letter-spacing: -0.02em;
+          line-height: 1.1;
+          white-space: nowrap;
+        }
+        .qt-handle {
+          display: block;
+          font-family: var(--font-mono);
+          font-size: 22px;
+          font-weight: 600;
+          letter-spacing: 0.02em;
+          color: var(--plate-muted);
+          white-space: nowrap;
+        }
+        .qt-body {
+          display: block;
+          margin-top: 28px;
+          font-weight: 650;
+          letter-spacing: -0.018em;
+          line-height: 1.2;
+        }
+        .qt-hi {
+          border-radius: 8px;
+          padding: 0 4px;
+          margin: 0 -2px;
+          -webkit-box-decoration-break: clone;
+          box-decoration-break: clone;
+          background-image: linear-gradient(color-mix(in oklab, var(--accent) 42%, transparent), color-mix(in oklab, var(--accent) 42%, transparent));
+          background-repeat: no-repeat;
+          background-size: 0% 100%;
+        }
+        .qt-thread {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 12px;
+          margin-top: 26px;
+        }
+        .qt-bub {
+          display: block;
+          max-width: 92%;
+          padding: 16px 24px 18px;
+          border-radius: 30px 30px 30px 10px;
+          background: var(--plate-2);
+          font-weight: 600;
+          letter-spacing: -0.01em;
+          line-height: 1.22;
+          color: var(--plate-ink);
+          transform-origin: 0% 100%;
+          opacity: 0;
+        }
+        .qt-meta {
+          display: block;
+          margin-top: 26px;
+          padding-top: 20px;
+          border-top: 1px solid rgba(var(--plate-ink-rgb), 0.1);
+          font-family: var(--font-mono);
+          font-size: 19px;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--plate-muted);
+          white-space: nowrap;
+        }
+      </style>
+      <div id="root" data-composition-id="quote" data-width="1080" data-height="1440">
+        <div class="qt-head"></div>
+        <div class="qt-zone">
+          <div class="qt-plate">
+            <div class="qt-who">
+              <div class="qt-av"></div>
+              <div class="qt-names">
+                <span class="qt-name"></span>
+                <span class="qt-handle"></span>
+              </div>
+            </div>
+            <div class="qt-content"></div>
+            <span class="qt-meta"></span>
+          </div>
+        </div>
+      </div>
+      <script>
+        (function () {
+          const root = document.querySelector('[data-composition-id="quote"]');
+          const v = window.__hyperframes.getVariables();
+          const span = Math.max(0.1, Number(v.span) || 3);
+          const isDm = v.kind === "dm";
+
+          function tokPx(name, fallback) {
+            const n = parseFloat(getComputedStyle(root).getPropertyValue(name));
+            return Number.isFinite(n) ? n : fallback;
+          }
+          const X0 = Math.max(tokPx("--safe-left", 80), tokPx("--safe-right", 150));
+          const X1 = 1080 - tokPx("--safe-right", 150);
+          const BOTTOM = tokPx("--content-bottom", 1180) - 20;
+          const HOOK = tokPx("--hook-top", 285);
+
+          function richText(el, text) {
+            String(text || "")
+              .split(/(\*[^*]+\*)/)
+              .forEach(function (part) {
+                if (!part) return;
+                if (part.length > 2 && part.charAt(0) === "*" && part.charAt(part.length - 1) === "*") {
+                  const s = document.createElement("span");
+                  s.className = "serif";
+                  s.textContent = part.slice(1, -1);
+                  el.appendChild(s);
+                } else {
+                  el.appendChild(document.createTextNode(part));
+                }
+              });
+          }
+          // text with the highlight phrase wrapped in a sweepable span (textContent only)
+          function withHighlight(el, text, hi) {
+            const at = hi ? text.indexOf(hi) : -1;
+            if (at < 0) {
+              el.textContent = text;
+              return null;
+            }
+            el.appendChild(document.createTextNode(text.slice(0, at)));
+            const mark = document.createElement("span");
+            mark.className = "qt-hi";
+            mark.textContent = hi;
+            el.appendChild(mark);
+            el.appendChild(document.createTextNode(text.slice(at + hi.length)));
+            return mark;
+          }
+
+          // heading
+          const head = root.querySelector(".qt-head");
+          let headBottom = 0;
+          let kicker = null;
+          if (String(v.kicker || "")) {
+            kicker = document.createElement("span");
+            kicker.className = "qt-kicker";
+            kicker.textContent = String(v.kicker);
+            head.appendChild(kicker);
+            headBottom = HOOK + 68;
+          }
+          const lineEls = String(v.heading || "")
+            .split(" / ")
+            .filter(function (s) {
+              return s.trim() !== "";
+            })
+            .slice(0, 2)
+            .map(function (txt) {
+              const el = document.createElement("span");
+              el.className = "qt-line";
+              richText(el, txt);
+              head.appendChild(el);
+              return el;
+            });
+          if (lineEls.length) headBottom = (headBottom || HOOK) + lineEls.length * 84;
+
+          // the plate is centred (slightly high) in the space left under the heading
+          const zone = root.querySelector(".qt-zone");
+          const zTop = headBottom ? Math.max(headBottom + 50, HOOK + 160) : HOOK + 20;
+          zone.style.left = X0 + "px";
+          zone.style.width = X1 - X0 + "px";
+          zone.style.top = zTop + "px";
+          zone.style.height = BOTTOM - zTop + "px";
+
+          // who
+          const name = String(v.name || "");
+          const avSize = isDm ? 76 : 92;
+          const av = root.querySelector(".qt-av");
+          av.style.width = avSize + "px";
+          av.style.height = avSize + "px";
+          if (String(v.avatar || "")) {
+            const img = document.createElement("img");
+            img.setAttribute("src", String(v.avatar));
+            img.setAttribute("alt", "");
+            av.appendChild(img);
+          } else {
+            const ini = document.createElement("span");
+            ini.className = "qt-initials";
+            ini.style.fontSize = Math.round(avSize * 0.4) + "px";
+            ini.textContent = name
+              .split(/\s+/)
+              .filter(Boolean)
+              .slice(0, 2)
+              .map(function (w) {
+                return w.charAt(0).toUpperCase();
+              })
+              .join("");
+            av.appendChild(ini);
+          }
+          const nameEl = root.querySelector(".qt-name");
+          nameEl.textContent = name;
+          const handleEl = root.querySelector(".qt-handle");
+          handleEl.textContent = String(v.handle || "");
+          if (!handleEl.textContent) handleEl.style.display = "none";
+          const metaEl = root.querySelector(".qt-meta");
+          metaEl.textContent = String(v.meta || "");
+          if (!metaEl.textContent) metaEl.style.display = "none";
+
+          // content
+          const content = root.querySelector(".qt-content");
+          const text = String(v.text || "");
+          const hiText = String(v.highlight || "");
+          let mark = null;
+          const bubbles = [];
+          if (isDm) {
+            const thread = document.createElement("div");
+            thread.className = "qt-thread";
+            content.appendChild(thread);
+            const parts = text
+              .split(" / ")
+              .filter(function (s) {
+                return s.trim() !== "";
+              })
+              .slice(0, 4);
+            const total = parts.join(" ").length;
+            const size = total <= 70 ? 38 : total <= 130 ? 34 : 30;
+            parts.forEach(function (p) {
+              const b = document.createElement("span");
+              b.className = "qt-bub";
+              b.style.fontSize = size + "px";
+              if (!mark) mark = withHighlight(b, p, hiText);
+              else b.textContent = p;
+              thread.appendChild(b);
+              bubbles.push(b);
+            });
+          } else {
+            const body = document.createElement("span");
+            body.className = "qt-body";
+            body.style.fontSize = (text.length <= 70 ? 52 : text.length <= 120 ? 46 : text.length <= 170 ? 40 : 35) + "px";
+            mark = withHighlight(body, text, hiText);
+            content.appendChild(body);
+          }
+
+          const plate = root.querySelector(".qt-plate");
+          const tl = gsap.timeline({ paused: true });
+          if (kicker) tl.fromTo(kicker, { scale: 0.92, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.2, ease: "power2.out" }, 0.02);
+          lineEls.forEach(function (el, i) {
+            tl.fromTo(el, { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, 0.04 + i * 0.08);
+          });
+          const p0 = 0.08;
+          tl.fromTo(plate, { y: 90, rotation: 2, opacity: 0 }, { y: 0, rotation: 0, opacity: 1, duration: 0.55, ease: "power3.out" }, p0);
+          tl.fromTo(av, { scale: 0.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.4, ease: "back.out(2)" }, p0 + 0.18);
+          tl.fromTo(root.querySelector(".qt-names"), { x: -16, opacity: 0 }, { x: 0, opacity: 1, duration: 0.4, ease: "power3.out" }, p0 + 0.22);
+          let lastIn = p0 + 0.3;
+          if (isDm) {
+            bubbles.forEach(function (b, i) {
+              const at = p0 + 0.4 + i * 0.42;
+              tl.fromTo(b, { y: 18, scale: 0.88, opacity: 0 }, { y: 0, scale: 1, opacity: 1, duration: 0.32, ease: "back.out(1.8)" }, at);
+              lastIn = at;
+            });
+          } else {
+            tl.fromTo(content, { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, p0 + 0.3);
+          }
+          if (metaEl.textContent) tl.fromTo(metaEl, { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power2.out" }, lastIn + 0.2);
+
+          // highlighter sweep on the key phrase
+          const hiAt = Number(v.highlightAt) > 0 ? Number(v.highlightAt) : Math.max(0.75, lastIn + 0.4);
+          if (mark) tl.fromTo(mark, { backgroundSize: "0% 100%" }, { backgroundSize: "100% 100%", duration: 0.45, ease: "power3.inOut" }, hiAt);
+
+          // idle life: slow 2deg parallax tilt + float while the plate holds
+          const settle = Math.max(p0 + 0.7, mark ? hiAt + 0.5 : 0);
+          const reps = Math.floor((span - settle) / 1.6) - 1;
+          if (reps >= 0) {
+            tl.fromTo(plate, { rotation: 0, y: 0 }, { rotation: -1.2, y: -10, duration: 1.6, ease: "sine.inOut", yoyo: true, repeat: reps, immediateRender: false }, settle);
+          }
+          window.__timelines["quote"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

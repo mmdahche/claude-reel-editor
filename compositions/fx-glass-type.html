@@ -1,0 +1,169 @@
+<!doctype html>
+<!--
+  fx-glass-type:
+  one giant word in glass-looking sans 900 letters (frosted fill, light rim, cool accent tint,
+  a specular sheen that sweeps across) standing on the stage BEHIND the speaker's free cutout. Optional
+  strike: a --burn bar draws across the word (the strikethrough, scaled up for giant type;
+  burn because a ban is the stakes) and the letters dim. Letters rise one by one (text
+  rise), then float. Size fits the safe width (x 80-1000 above y 900); the word sits above
+  --content-bottom.
+  Variables: word, top (px: top of the letters' box), maxSize (px), strikeAt (s, 0 = none),
+  sheenAt (s), span (s).
+-->
+<html
+  lang="en"
+  data-composition-variables='[
+    {"id":"word","type":"string","label":"Word","default":"GLASS"},
+    {"id":"top","type":"number","label":"Top (px)","default":330,"min":0},
+    {"id":"maxSize","type":"number","label":"Max size (px)","default":420,"min":60},
+    {"id":"strikeAt","type":"number","label":"Strike at (s, 0 = none)","default":0,"min":0},
+    {"id":"sheenAt","type":"number","label":"Sheen at (s)","default":0.35,"min":0},
+    {"id":"span","type":"number","label":"Host length (s)","default":2,"min":0.1}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          font-family: var(--font-sans);
+        }
+        .gt-word {
+          position: absolute;
+          left: 0;
+          width: 1080px;
+          display: flex;
+          justify-content: center;
+          white-space: nowrap;
+        }
+        /* No text-stroke: variable fonts often have with overlapping contours, and a stroke draws
+           those inner lines (seen in early snapshots). The glass is built from clipped
+           gradient fills only (every text layer paints through its own gradient, which is what the
+           layout audit accepts as painted text). Back to front: the base glyph (a faint stage-coloured fill
+           that carries the drop shadow and the blue glow; Chrome paints a text-shadow over its own
+           clipped fill, so the shadow lives on the back layer), the frosted body, a bright
+           top/bottom edge band, and a moving sheen. */
+        .gt-ch {
+          position: relative;
+          display: inline-block;
+          font-weight: 900;
+          letter-spacing: 0;
+          margin: 0 -0.012em;
+          line-height: 0.82;
+          color: transparent;
+          -webkit-background-clip: text;
+          background-clip: text;
+          background-image: linear-gradient(rgba(var(--stage-rgb), 0.28), rgba(var(--stage-rgb), 0.28));
+          text-shadow: 0 26px 46px rgba(0, 0, 0, 0.36), 0 0 46px rgba(var(--accent-rgb), 0.36);
+        }
+        .gt-ch .gt-fill {
+          background-image: linear-gradient(172deg, rgba(var(--text-rgb), 0.78) 0%, rgba(var(--line-rgb), 0.46) 26%, rgba(var(--line-rgb), 0.2) 52%, rgba(var(--line-rgb), 0.3) 78%, rgba(var(--text-rgb), 0.55) 100%);
+        }
+        .gt-ch .gt-fill,
+        .gt-ch .gt-edge,
+        .gt-ch .gt-sheen {
+          position: absolute;
+          left: 0;
+          top: 0;
+          color: transparent;
+          text-shadow: none;
+          -webkit-background-clip: text;
+          background-clip: text;
+        }
+        .gt-ch .gt-edge {
+          background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 9%, rgba(255, 255, 255, 0) 91%, rgba(200, 225, 255, 0.55) 100%);
+        }
+        .gt-ch .gt-sheen {
+          background-image: linear-gradient(105deg, rgba(255, 255, 255, 0) 40%, rgba(255, 255, 255, 0.95) 50%, rgba(255, 255, 255, 0) 60%);
+          background-size: 300% 100%;
+          background-position: 100% 0;
+          opacity: 0.9;
+        }
+        .gt-strike {
+          position: absolute;
+          height: 22px;
+          border-radius: 11px;
+          background: linear-gradient(90deg, var(--burn-1), var(--burn-2));
+          box-shadow: 0 0 30px rgba(var(--burn-rgb), 0.6), 0 8px 24px rgba(0, 0, 0, 0.45);
+          transform-origin: 0% 50%;
+          transform: rotate(-4deg) scaleX(0);
+        }
+      </style>
+      <div id="root" data-composition-id="fx-glass-type" data-width="1080" data-height="1440">
+        <div class="gt-word"></div>
+      </div>
+      <script>
+        (function () {
+          const root = document.querySelector('[data-composition-id="fx-glass-type"]');
+          const v = window.__hyperframes.getVariables();
+          const span = Math.max(0.1, Number(v.span) || 2);
+          function tokPx(name, fallback) {
+            const n = parseFloat(getComputedStyle(root).getPropertyValue(name));
+            return Number.isFinite(n) ? n : fallback;
+          }
+          const L = tokPx("--safe-left", 80);
+          const R = 1080 - tokPx("--safe-right-upper", 80);
+          const CAPW = { A: 0.74, B: 0.7, C: 0.72, D: 0.74, E: 0.62, F: 0.6, G: 0.76, H: 0.76, I: 0.31, J: 0.58, K: 0.72, L: 0.58, M: 0.9, N: 0.76, O: 0.78, P: 0.68, Q: 0.78, R: 0.7, S: 0.66, T: 0.64, U: 0.74, V: 0.72, W: 1.0, X: 0.72, Y: 0.7, Z: 0.64, "-": 0.4, " ": 0.26 };
+          const word = String(v.word || "").toUpperCase();
+          const em = Array.from(word).reduce(function (a, ch) {
+            return a + (CAPW[ch] !== undefined ? CAPW[ch] : 0.66) - 0.024;
+          }, 0);
+          const size = Math.max(60, Math.min(Number(v.maxSize) || 420, Math.floor((R - L - 40) / Math.max(0.5, em))));
+          const top = Math.max(tokPx("--hook-top", 285), Number(v.top) || 330);
+          const box = root.querySelector(".gt-word");
+          box.style.top = top + "px";
+          const chars = Array.from(word).map(function (ch) {
+            const s = document.createElement("span");
+            s.className = "gt-ch";
+            s.style.fontSize = size + "px";
+            s.textContent = ch;
+            ["gt-fill", "gt-edge"].forEach(function (cls) {
+              const layer = document.createElement("span");
+              layer.className = cls;
+              layer.textContent = ch;
+              s.appendChild(layer);
+            });
+            const sh = document.createElement("span");
+            sh.className = "gt-sheen";
+            sh.textContent = ch;
+            s.appendChild(sh);
+            box.appendChild(s);
+            return { s: s, sh: sh };
+          });
+          const tl = gsap.timeline({ paused: true });
+          chars.forEach(function (c, i) {
+            tl.fromTo(c.s, { y: 60, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, 0.02 + i * 0.05);
+          });
+          const sheenAt = Math.max(0, Number(v.sheenAt) || 0.35);
+          chars.forEach(function (c, i) {
+            tl.fromTo(c.sh, { backgroundPosition: "100% 0" }, { backgroundPosition: "0% 0", duration: 0.7, ease: "power2.inOut" }, sheenAt + i * 0.06);
+          });
+          const strikeAt = Number(v.strikeAt) || 0;
+          if (strikeAt > 0 && strikeAt < span) {
+            const est = em * size;
+            const bar = document.createElement("i");
+            bar.className = "gt-strike";
+            bar.style.left = Math.round(540 - est / 2 - 20) + "px";
+            bar.style.width = Math.round(est + 40) + "px";
+            bar.style.top = Math.round(top + size * 0.36) + "px";
+            root.appendChild(bar);
+            tl.fromTo(bar, { scaleX: 0, rotation: -4 }, { scaleX: 1, rotation: -4, duration: 0.24, ease: "power3.out" }, strikeAt);
+            tl.to(chars.map(function (c) { return c.s; }), { opacity: 0.45, duration: 0.25, ease: "power2.out" }, strikeAt + 0.08);
+          }
+          // idle life: the word floats
+          const settle = 0.6 + chars.length * 0.05;
+          if (span - settle > 1.0) {
+            const reps = Math.max(0, Math.floor((span - settle) / 0.9) - 1);
+            tl.fromTo(box, { y: 0 }, { y: -14, duration: 0.9, ease: "sine.inOut", yoyo: true, repeat: reps, immediateRender: false }, settle);
+          }
+          window.__timelines["fx-glass-type"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

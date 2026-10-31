@@ -1,0 +1,316 @@
+<!doctype html>
+<!--
+  fx-cover-story:
+  the speaker's free cutout becomes the cover star of a magazine cover built from the stage.
+  Two layers from one file, so the cover can sit behind him and its side lines in front:
+    layer "back"  (use as the beat's scene, z 10, behind the face): issue strip with rules,
+                  kicker line, masthead word, headline with ONE *serif* accent (title
+                  rule), a studio glow behind the head. Visible from frame 0 (rule: frame 0
+                  shows b-roll and the face together); the kicker and headline rise in 0-0.5 s.
+    layer "front" (use as an overlay, z 30, in front of the face): two cover lines left and
+                  right of the head that pop in when the speaker says them (leftAt / rightAt).
+  Sans 900 masthead (not serif: serif is the one accent word only), mono strip.
+  Text stays inside the platform safe zone (x 80-1000 above y 900, x 80-930 below) and above
+  --content-bottom. Nothing here is a logo, seal or document.
+  Variables: layer (back|front), stripLeft, stripRight, kicker, masthead, headline ("*serif*"),
+  leftLine / rightLine ("line / line"), leftAt / rightAt (s), linesTop (px), span (s).
+-->
+<html
+  lang="en"
+  data-composition-variables='[
+    {"id":"layer","type":"enum","label":"Layer","default":"back","options":[{"value":"back","label":"Back (scene)"},{"value":"front","label":"Front (overlay)"}]},
+    {"id":"stripLeft","type":"string","label":"Strip left","default":"@HANDLE"},
+    {"id":"stripRight","type":"string","label":"Strip right","default":"ISSUE ONE"},
+    {"id":"kicker","type":"string","label":"Kicker line","default":"THE COVER"},
+    {"id":"masthead","type":"string","label":"Masthead word","default":"STORY"},
+    {"id":"headline","type":"string","label":"Headline (*serif*)","default":"One *accent* word"},
+    {"id":"leftLine","type":"string","label":"Left cover line (/ = new line)","default":""},
+    {"id":"rightLine","type":"string","label":"Right cover line (/ = new line)","default":""},
+    {"id":"leftAt","type":"number","label":"Left line at (s)","default":1,"min":0},
+    {"id":"rightAt","type":"number","label":"Right line at (s)","default":2,"min":0},
+    {"id":"linesTop","type":"number","label":"Cover lines top (px)","default":770,"min":0},
+    {"id":"span","type":"number","label":"Host length (s)","default":4,"min":0.1}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          color: var(--text);
+          font-family: var(--font-sans);
+        }
+        .cv-push {
+          position: absolute;
+          inset: 0;
+          transform-origin: 50% 30%;
+        }
+        .cv-glow {
+          position: absolute;
+          left: 90px;
+          top: 560px;
+          width: 900px;
+          height: 900px;
+          border-radius: 50%;
+          background: radial-gradient(closest-side, rgba(var(--accent-rgb), 0.34), rgba(var(--accent-rgb), 0.1) 55%, rgba(var(--stage-rgb), 0) 100%);
+        }
+        .cv-strip {
+          position: absolute;
+          top: var(--hook-top);
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          height: 40px;
+          font-family: var(--font-mono);
+          font-size: 22px;
+          font-weight: 700;
+          letter-spacing: 0.18em;
+          color: var(--text-soft);
+          white-space: nowrap;
+        }
+        .cv-rule {
+          position: absolute;
+          height: 2px;
+          background: rgba(var(--text-rgb), 0.55);
+          transform-origin: 0% 50%;
+        }
+        .cv-kicker {
+          position: absolute;
+          display: block;
+          text-align: center;
+          font-size: 66px;
+          font-weight: 850;
+          letter-spacing: -0.03em;
+          line-height: 1;
+          white-space: nowrap;
+        }
+        .cv-mast {
+          position: absolute;
+          display: block;
+          text-align: center;
+          font-weight: 900;
+          letter-spacing: -0.05em;
+          line-height: 0.86;
+          white-space: nowrap;
+          text-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+        }
+        .cv-head {
+          position: absolute;
+          display: block;
+          text-align: center;
+          font-size: 74px;
+          font-weight: 850;
+          letter-spacing: -0.035em;
+          line-height: 1;
+          white-space: nowrap;
+          text-shadow: 0 4px 30px rgba(0, 0, 0, 0.35);
+        }
+        .cv-head .serif {
+          position: relative;
+          display: inline-block;
+          font-family: var(--font-serif);
+          font-style: italic;
+          font-weight: 400;
+          font-size: calc(1em * var(--serif-scale));
+          letter-spacing: 0;
+          line-height: 0.9;
+          padding: 0 0.04em;
+          color: var(--accent-text);
+        }
+        .cv-uline {
+          position: absolute;
+          left: 0.04em;
+          right: 0.04em;
+          bottom: -0.04em;
+          height: 7px;
+          border-radius: 4px;
+          background: var(--accent);
+          box-shadow: 0 0 18px var(--accent);
+          transform-origin: 0% 50%;
+        }
+        .cv-line {
+          position: absolute;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          font-size: 34px;
+          font-weight: 850;
+          letter-spacing: -0.01em;
+          line-height: 1.04;
+          text-transform: uppercase;
+          white-space: nowrap;
+          text-shadow: 0 3px 18px rgba(0, 0, 0, 0.7);
+          opacity: 0;
+        }
+        .cv-line i {
+          display: block;
+          width: 64px;
+          height: 6px;
+          margin-bottom: 10px;
+          border-radius: 3px;
+          background: var(--accent);
+          box-shadow: 0 0 14px var(--accent);
+        }
+        .cv-line.right {
+          align-items: flex-end;
+          text-align: right;
+        }
+      </style>
+      <div id="root" data-composition-id="fx-cover-story" data-width="1080" data-height="1440">
+        <div class="cv-push"></div>
+      </div>
+      <script>
+        (function () {
+          const root = document.querySelector('[data-composition-id="fx-cover-story"]');
+          const v = window.__hyperframes.getVariables();
+          const span = Math.max(0.1, Number(v.span) || 4);
+          const front = v.layer === "front";
+          function tokPx(name, fallback) {
+            const n = parseFloat(getComputedStyle(root).getPropertyValue(name));
+            return Number.isFinite(n) ? n : fallback;
+          }
+          const L = tokPx("--safe-left", 80);
+          const R = 1080 - tokPx("--safe-right-upper", 80);
+          const HOOK = tokPx("--hook-top", 285);
+          const push = root.querySelector(".cv-push");
+          const tl = gsap.timeline({ paused: true });
+
+          function el(tag, cls, text) {
+            const e = document.createElement(tag);
+            if (cls) e.className = cls;
+            if (text !== undefined) e.textContent = text;
+            return e;
+          }
+          // "*word*" -> serif italic accent with the accent underline. textContent only.
+          function richText(node, text) {
+            String(text || "")
+              .split(/(\*[^*]+\*)/)
+              .forEach(function (part) {
+                if (!part) return;
+                if (part.length > 2 && part.charAt(0) === "*" && part.charAt(part.length - 1) === "*") {
+                  const s = el("span", "serif", part.slice(1, -1));
+                  s.appendChild(el("span", "cv-uline"));
+                  node.appendChild(s);
+                } else {
+                  node.appendChild(document.createTextNode(part));
+                }
+              });
+          }
+          // Width estimate in em (heavy sans caps, serif italic for *accent* runs; an estimate for any brand font), so the
+          // layout never depends on whether the web font has loaded when this runs (build.mjs does the same)
+          const CAPW = { A: 0.74, B: 0.7, C: 0.72, D: 0.74, E: 0.62, F: 0.6, G: 0.76, H: 0.76, I: 0.31, J: 0.58, K: 0.72, L: 0.58, M: 0.9, N: 0.76, O: 0.78, P: 0.68, Q: 0.78, R: 0.7, S: 0.66, T: 0.64, U: 0.74, V: 0.72, W: 1.0, X: 0.72, Y: 0.7, Z: 0.64, " ": 0.26 };
+          function emWidth(text, track) {
+            let w = 0;
+            String(text || "")
+              .split(/(\*[^*]+\*)/)
+              .forEach(function (part) {
+                if (!part) return;
+                const serif = part.length > 2 && part.charAt(0) === "*" && part.charAt(part.length - 1) === "*";
+                const s = serif ? part.slice(1, -1) : part;
+                Array.from(s.toUpperCase()).forEach(function (ch) {
+                  const base = CAPW[ch] !== undefined ? CAPW[ch] : /[0-9]/.test(ch) ? 0.66 : 0.34;
+                  w += serif ? base * 0.62 * 1.12 : base + track;
+                });
+              });
+            return w;
+          }
+          function fitSize(text, maxW, startPx, minPx, track) {
+            const em = Math.max(0.5, emWidth(text, track));
+            return Math.max(minPx, Math.min(startPx, Math.floor((maxW - 24) / em)));
+          }
+          // text boxes keep 10 px inside the safe zone on both sides (the no-text bands start at x 80 / 1002)
+          const TL = L + 10;
+          const TR = R - 10;
+          function block(node, top, size) {
+            node.style.left = TL + "px";
+            node.style.width = TR - TL + "px";
+            node.style.top = top + "px";
+            node.style.fontSize = size + "px";
+          }
+
+          if (!front) {
+            const glow = el("div", "cv-glow");
+            push.appendChild(glow);
+            // issue strip between two rules (magazine top bar)
+            const strip = el("div", "cv-strip");
+            strip.style.left = TL + "px";
+            strip.style.width = TR - TL + "px";
+            strip.appendChild(el("span", "", String(v.stripLeft || "")));
+            strip.appendChild(el("span", "", String(v.stripRight || "")));
+            push.appendChild(strip);
+            const r1 = el("div", "cv-rule");
+            const r2 = el("div", "cv-rule");
+            [r1, r2].forEach(function (r, i) {
+              r.style.left = L + "px";
+              r.style.width = R - L + "px";
+              r.style.top = HOOK + (i === 0 ? -6 : 46) + "px";
+              push.appendChild(r);
+            });
+            const kicker = el("span", "cv-kicker", String(v.kicker || ""));
+            push.appendChild(kicker);
+            const mast = el("span", "cv-mast", String(v.masthead || ""));
+            push.appendChild(mast);
+            const head = el("span", "cv-head");
+            richText(head, v.headline);
+            push.appendChild(head);
+            const kSize = fitSize(v.kicker, TR - TL, 66, 40, -0.03);
+            const mastSize = fitSize(v.masthead, TR - TL, 236, 120, -0.05);
+            const hSize = fitSize(v.headline, TR - TL, 74, 48, -0.035);
+            const kTop = HOOK + 70;
+            block(kicker, kTop, kSize);
+            const mTop = kTop + kSize + 8;
+            block(mast, mTop, mastSize);
+            const hTop = mTop + Math.round(mastSize * 0.86) + 10;
+            block(head, hTop, hSize);
+
+            // frame 0: strip, rules, glow and masthead already on screen (b-roll with the face)
+            tl.fromTo(mast, { scale: 1.04 }, { scale: 1, duration: 0.6, ease: "power3.out" }, 0);
+            tl.fromTo(kicker, { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, 0.0);
+            tl.fromTo(head, { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, 0.08);
+            root.querySelectorAll(".serif").forEach(function (s) {
+              tl.fromTo(s, { y: 18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power3.out" }, 0.18);
+            });
+            root.querySelectorAll(".cv-uline").forEach(function (u) {
+              tl.fromTo(u, { scaleX: 0 }, { scaleX: 1, duration: 0.4, ease: "power3.inOut" }, 0.45);
+            });
+            // idle life: the studio glow pushes in slowly and breathes (text stays put, inside the safe zone)
+            tl.fromTo(glow, { scale: 1 }, { scale: 1.08, duration: span, ease: "none" }, 0);
+            const reps = Math.max(0, Math.floor(span / 1.2) - 1);
+            tl.fromTo(glow, { opacity: 0.85 }, { opacity: 1, duration: 1.2, ease: "sine.inOut", yoyo: true, repeat: reps }, 0);
+          } else {
+            const top = Math.max(HOOK, Number(v.linesTop) || 770);
+            [
+              [String(v.leftLine || ""), Number(v.leftAt) || 0, false],
+              [String(v.rightLine || ""), Number(v.rightAt) || 0, true],
+            ].forEach(function (row) {
+              if (!row[0]) return;
+              const box = el("div", "cv-line" + (row[2] ? " right" : ""));
+              box.appendChild(el("i"));
+              row[0]
+                .split(" / ")
+                .filter(function (s) {
+                  return s.trim() !== "";
+                })
+                .slice(0, 3)
+                .forEach(function (t) {
+                  box.appendChild(el("span", "", t));
+                });
+              box.style.top = top + "px";
+              if (row[2]) box.style.right = 1080 - (R - 10) + "px";
+              else box.style.left = L + 10 + "px";
+              push.appendChild(box);
+              const at = Math.max(0, Math.min(span - 0.2, row[1]));
+              tl.fromTo(box, { x: row[2] ? 30 : -30, opacity: 0 }, { x: 0, opacity: 1, duration: 0.3, ease: "power3.out" }, at);
+            });
+          }
+          window.__timelines["fx-cover-story"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

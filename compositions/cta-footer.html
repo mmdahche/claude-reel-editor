@@ -1,0 +1,92 @@
+<!doctype html>
+<!--
+  cta-footer: the CTA scene's client footer on its own (logo and/or a short mono line at y 1122
+  in the 1080x1440 panel, inside x 150-930), for a closing beat whose ask is not a comment
+  keyword, so the cta scene's comment box and DM card would promise something that does not
+  exist. Use it as an OVERLAY on the closing beat. Markup, size, position and entrance match
+  compositions/cta.html (.ct-foot). The logo file is shown unaltered: no recolour, no glow.
+  Client defaults: scripts/build.mjs fills footerLogo and footerText from the active brand.json
+  "cta" block when the shot list leaves them out. With neither set, nothing is drawn.
+  Variables: at (s, when the footer settles in), footerLogo (image path), footerText, span (s).
+-->
+<html
+  lang="en"
+  data-composition-variables='[
+    {"id":"at","type":"number","label":"Footer enters (s)","default":0.4,"min":0},
+    {"id":"footerLogo","type":"string","label":"Footer logo (image path)","default":""},
+    {"id":"footerText","type":"string","label":"Footer text","default":""},
+    {"id":"span","type":"number","label":"Host length (s)","default":3,"min":0.1}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          color: var(--text);
+          font-family: var(--font-sans);
+        }
+        .cf-foot {
+          position: absolute;
+          left: 150px;
+          width: 780px;
+          top: 1122px;
+          height: 56px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 16px;
+          opacity: 0;
+        }
+        .cf-foot img {
+          display: block;
+          height: 52px;
+          width: auto;
+        }
+        .cf-foot span {
+          display: block;
+          font-family: var(--font-mono);
+          font-size: 20px;
+          font-weight: 700;
+          letter-spacing: 0.16em;
+          color: var(--muted);
+          white-space: nowrap;
+        }
+      </style>
+      <div id="root" data-composition-id="cta-footer" data-width="1080" data-height="1440">
+        <div class="cf-foot">
+          <span class="cf-foot-text"></span>
+        </div>
+      </div>
+      <script>
+        (function () {
+          const root = document.querySelector('[data-composition-id="cta-footer"]');
+          const v = window.__hyperframes.getVariables();
+          const span = Math.max(0.1, Number(v.span) || 3);
+          const at = Math.min(Math.max(0, Number(v.at) || 0), Math.max(0, span - 0.4));
+          const foot = root.querySelector(".cf-foot");
+          const footerLogo = String(v.footerLogo || "");
+          const footerText = String(v.footerText || "");
+          const footText = root.querySelector(".cf-foot-text");
+          footText.textContent = footerText;
+          if (!footerText) footText.style.display = "none";
+          if (footerLogo) {
+            const img = document.createElement("img");
+            img.alt = "";
+            img.src = footerLogo;
+            foot.insertBefore(img, footText);
+          }
+          if (!footerLogo && !footerText) foot.style.display = "none";
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo(foot, { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power3.out" }, at);
+          window.__timelines["cta-footer"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

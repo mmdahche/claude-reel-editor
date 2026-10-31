@@ -1,0 +1,436 @@
+<!doctype html>
+<!--
+  cta (scene 12): "Comment *KEYWORD*" headline, a comment box that types the keyword with a
+  blinking caret (~14 chars/s) and posts it, then a DM reply slides in on a light plate with
+  a HyperFrames-built guide cover, then the client's optional footer (logo and/or a short mono
+  line) at y ~1150. Everything below y 900 stays inside x 150-930 (right rail safe).
+  Client defaults: scripts/build.mjs fills dmName, dmAvatar, footerLogo, footerText and coverLogo
+  from the active brand.json "cta" block whenever the shot list leaves them out.
+  Variables: lead, keyword, sub, placeholder, typeAt, dmAt (s), dmName, dmAvatar (image path),
+             dmText, guideKicker, guideTitle (one *serif* word), guideSub, footer (boolean),
+             footerLogo (image path), footerText, coverLogo (image path), span.
+-->
+<html
+  lang="en"
+  data-composition-variables='[
+    {"id":"lead","type":"string","label":"Lead word","default":"Comment"},
+    {"id":"keyword","type":"string","label":"Keyword","default":"KEYWORD"},
+    {"id":"sub","type":"string","label":"Sub line","default":"and I will send you the guide"},
+    {"id":"placeholder","type":"string","label":"Comment placeholder","default":"Add a comment..."},
+    {"id":"typeAt","type":"number","label":"Typing starts (s)","default":0.7,"min":0},
+    {"id":"dmAt","type":"number","label":"DM slides in (s)","default":1.8,"min":0},
+    {"id":"dmName","type":"string","label":"DM sender","default":""},
+    {"id":"dmAvatar","type":"string","label":"DM sender avatar (image path)","default":""},
+    {"id":"dmText","type":"string","label":"DM text","default":"Here is your guide"},
+    {"id":"guideKicker","type":"string","label":"Guide kicker","default":"THE GUIDE"},
+    {"id":"guideTitle","type":"string","label":"Guide title (*serif*)","default":"The *guide*"},
+    {"id":"guideSub","type":"string","label":"Guide sub","default":""},
+    {"id":"footer","type":"boolean","label":"Client footer (shown when footerLogo or footerText is set)","default":true},
+    {"id":"footerLogo","type":"string","label":"Footer logo (image path)","default":""},
+    {"id":"footerText","type":"string","label":"Footer text","default":""},
+    {"id":"coverLogo","type":"string","label":"Guide cover mark (image path)","default":""},
+    {"id":"span","type":"number","label":"Host length (s)","default":5,"min":0.1}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          color: var(--text);
+          font-family: var(--font-sans);
+        }
+        .ct-head {
+          position: absolute;
+          left: var(--safe-left);
+          right: var(--safe-right-upper);
+          top: var(--hook-top);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+        }
+        .ct-title {
+          display: block;
+          font-size: 100px;
+          font-weight: 850;
+          letter-spacing: -0.04em;
+          line-height: 1.05;
+          white-space: nowrap;
+        }
+        .ct-key {
+          display: inline-block;
+          font-family: var(--font-serif);
+          font-style: italic;
+          font-weight: 400;
+          font-size: 1.28em;
+          letter-spacing: 0;
+          line-height: 0.9;
+          margin-left: 0.14em;
+          color: var(--accent-text);
+          text-shadow: 0 0 34px color-mix(in oklab, var(--accent) 45%, transparent);
+        }
+        .ct-sub {
+          display: block;
+          margin-top: 12px;
+          font-family: var(--font-mono);
+          font-size: 24px;
+          font-weight: 600;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: var(--muted);
+        }
+        .ct-box {
+          position: absolute;
+          left: 130px;
+          width: 820px;
+          top: 520px;
+          height: 108px;
+          display: flex;
+          align-items: center;
+          gap: 22px;
+          padding: 0 26px;
+          border-radius: 54px;
+          background: rgba(var(--stage-rgb), 0.9);
+          border: 2px solid var(--card-border);
+          box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+          opacity: 0;
+        }
+        .ct-av {
+          display: block;
+          flex: 0 0 auto;
+          width: 60px;
+          height: 60px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, var(--accent-text), var(--accent));
+        }
+        .ct-field {
+          position: relative;
+          flex: 1 1 auto;
+          display: flex;
+          align-items: center;
+          height: 60px;
+        }
+        .ct-ph {
+          position: absolute;
+          left: 0;
+          top: 9px;
+          display: block;
+          font-size: 34px;
+          font-weight: 500;
+          color: rgba(var(--text-rgb), 0.62);
+          white-space: nowrap;
+        }
+        .ct-typed {
+          display: block;
+          font-size: 40px;
+          font-weight: 800;
+          letter-spacing: 0.04em;
+          color: var(--text);
+          white-space: nowrap;
+        }
+        .ct-caret {
+          display: block;
+          width: 4px;
+          height: 46px;
+          margin-left: 4px;
+          border-radius: 2px;
+          background: var(--accent);
+        }
+        .ct-post {
+          display: block;
+          flex: 0 0 auto;
+          font-size: 32px;
+          font-weight: 800;
+          color: color-mix(in oklab, var(--accent) 55%, #ffffff);
+          opacity: 0.45;
+        }
+        .ct-dm {
+          position: absolute;
+          left: 150px;
+          width: 780px;
+          top: 680px;
+          height: 420px;
+          padding: 30px 32px;
+          border-radius: var(--plate-radius);
+          background: var(--plate);
+          border: 1px solid rgba(0, 0, 0, 0.08);
+          box-shadow: var(--plate-shadow);
+          color: var(--plate-ink);
+          opacity: 0;
+        }
+        .ct-dm-head {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+        }
+        .ct-dm-av {
+          display: block;
+          width: 64px;
+          height: 64px;
+          border-radius: 50%;
+          object-fit: cover;
+        }
+        .ct-dm-name {
+          display: block;
+          font-size: 30px;
+          font-weight: 800;
+          letter-spacing: -0.01em;
+        }
+        .ct-dm-meta {
+          display: block;
+          font-family: var(--font-mono);
+          font-size: 18px;
+          font-weight: 600;
+          letter-spacing: 0.08em;
+          color: var(--plate-muted);
+        }
+        .ct-dm-body {
+          display: flex;
+          align-items: flex-start;
+          gap: 26px;
+          margin-top: 20px;
+        }
+        .ct-bubble {
+          display: block;
+          margin-top: 14px;
+          padding: 16px 22px;
+          border-radius: 26px 26px 26px 8px;
+          background: var(--plate-2);
+          font-size: 30px;
+          font-weight: 600;
+          color: var(--plate-ink);
+          white-space: nowrap;
+        }
+        .ct-cover {
+          position: relative;
+          flex: 0 0 auto;
+          width: 210px;
+          height: 264px;
+          border-radius: 20px;
+          overflow: hidden;
+          padding: 22px 18px;
+          background: radial-gradient(120% 70% at 50% 10%, var(--stage-glow-1) 0%, var(--stage-glow-2) 45%, var(--stage) 85%);
+          box-shadow: 0 18px 40px rgba(var(--stage-rgb), 0.35);
+          color: var(--text);
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          opacity: 0;
+        }
+        .ct-cover-k {
+          display: block;
+          font-family: var(--font-mono);
+          font-size: 15px;
+          font-weight: 800;
+          letter-spacing: 0.16em;
+          color: color-mix(in oklab, var(--accent) 45%, #ffffff);
+        }
+        .ct-cover-t {
+          display: block;
+          font-size: 36px;
+          font-weight: 850;
+          letter-spacing: -0.03em;
+          line-height: 1;
+        }
+        .ct-cover-t .serif {
+          display: inline-block;
+          font-family: var(--font-serif);
+          font-style: italic;
+          font-weight: 400;
+          font-size: 1.14em;
+        }
+        .ct-cover-s {
+          display: block;
+          font-family: var(--font-mono);
+          font-size: 14px;
+          font-weight: 600;
+          letter-spacing: 0.06em;
+          color: rgba(var(--text-rgb), 0.8);
+        }
+        .ct-cover-mark {
+          position: absolute;
+          left: 18px;
+          bottom: 16px;
+          display: block;
+          height: 30px;
+          width: 60px;
+          background: left center / contain no-repeat;
+        }
+        .ct-foot {
+          position: absolute;
+          left: 150px;
+          width: 780px;
+          top: 1122px;
+          height: 56px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 16px;
+          opacity: 0;
+        }
+        .ct-foot img {
+          display: block;
+          height: 52px;
+          width: auto;
+        }
+        .ct-foot span {
+          display: block;
+          font-family: var(--font-mono);
+          font-size: 20px;
+          font-weight: 700;
+          letter-spacing: 0.16em;
+          color: var(--muted);
+          white-space: nowrap;
+        }
+      </style>
+      <div id="root" data-composition-id="cta" data-width="1080" data-height="1440">
+        <div class="ct-head">
+          <span class="ct-title"><span class="ct-lead"></span> <span class="ct-key"></span></span>
+          <span class="ct-sub"></span>
+        </div>
+        <div class="ct-box">
+          <i class="ct-av"></i>
+          <div class="ct-field">
+            <span class="ct-ph" data-layout-allow-overlap></span>
+            <span class="ct-typed"></span>
+            <i class="ct-caret"></i>
+          </div>
+          <span class="ct-post">Post</span>
+        </div>
+        <div class="ct-dm">
+          <div class="ct-dm-head">
+            <i class="ct-dm-av ct-av"></i>
+            <div>
+              <span class="ct-dm-name"></span>
+              <span class="ct-dm-meta">REPLIED TO YOUR COMMENT</span>
+            </div>
+          </div>
+          <div class="ct-dm-body">
+            <div class="ct-cover">
+              <span class="ct-cover-k"></span>
+              <span class="ct-cover-t"></span>
+              <span class="ct-cover-s"></span>
+              <i class="ct-cover-mark"></i>
+            </div>
+            <span class="ct-bubble"></span>
+          </div>
+        </div>
+        <div class="ct-foot">
+          <span class="ct-foot-text"></span>
+        </div>
+      </div>
+      <script>
+        (function () {
+          const root = document.querySelector('[data-composition-id="cta"]');
+          const v = window.__hyperframes.getVariables();
+          const brandTok = (n, f) => (getComputedStyle(root || document.documentElement).getPropertyValue(n).trim() || f);
+          const span = Math.max(0.1, Number(v.span) || 5);
+          const keyword = String(v.keyword || "KEYWORD").toUpperCase();
+          root.querySelector(".ct-lead").textContent = String(v.lead || "Comment");
+          root.querySelector(".ct-key").textContent = keyword;
+          const sub = root.querySelector(".ct-sub");
+          sub.textContent = String(v.sub || "");
+          if (!sub.textContent) sub.style.display = "none";
+          const ph = root.querySelector(".ct-ph");
+          ph.textContent = String(v.placeholder || "");
+          root.querySelector(".ct-dm-name").textContent = String(v.dmName || "");
+          root.querySelector(".ct-bubble").textContent = String(v.dmText || "");
+          root.querySelector(".ct-cover-k").textContent = String(v.guideKicker || "");
+          root.querySelector(".ct-cover-s").textContent = String(v.guideSub || "");
+          const coverT = root.querySelector(".ct-cover-t");
+          String(v.guideTitle || "")
+            .split(/(\*[^*]+\*)/)
+            .forEach(function (part) {
+              if (!part) return;
+              if (part.length > 2 && part.charAt(0) === "*" && part.charAt(part.length - 1) === "*") {
+                const s = document.createElement("span");
+                s.className = "serif";
+                s.textContent = part.slice(1, -1);
+                coverT.appendChild(s);
+              } else {
+                coverT.appendChild(document.createTextNode(part));
+              }
+            });
+          // client images (paths relative to the project root, from the shot list or brand.json)
+          const dmAvatar = String(v.dmAvatar || "");
+          if (dmAvatar) {
+            const avSlot = root.querySelector(".ct-dm-av");
+            const img = document.createElement("img");
+            img.className = "ct-dm-av";
+            img.alt = "";
+            img.src = dmAvatar;
+            avSlot.replaceWith(img);
+          }
+          const coverLogo = String(v.coverLogo || "");
+          const coverMark = root.querySelector(".ct-cover-mark");
+          if (coverLogo) coverMark.style.backgroundImage = 'url("' + coverLogo.replace(/["\\]/g, "") + '")';
+          else coverMark.style.display = "none";
+          const foot = root.querySelector(".ct-foot");
+          const footerLogo = String(v.footerLogo || "");
+          const footerText = String(v.footerText || "");
+          const footText = root.querySelector(".ct-foot-text");
+          footText.textContent = footerText;
+          if (!footerText) footText.style.display = "none";
+          if (footerLogo) {
+            const img = document.createElement("img");
+            img.alt = "";
+            img.src = footerLogo;
+            foot.insertBefore(img, footText);
+          }
+          const showFooter = !(v.footer === false || v.footer === "false") && Boolean(footerLogo || footerText);
+          if (!showFooter) foot.style.display = "none";
+
+          const typeAt = Math.max(0, Number(v.typeAt) || 0.7);
+          const dmAt = Math.max(typeAt + 0.4, Number(v.dmAt) || 1.8);
+          const typed = root.querySelector(".ct-typed");
+          const caret = root.querySelector(".ct-caret");
+          const post = root.querySelector(".ct-post");
+          const box = root.querySelector(".ct-box");
+          const tl = gsap.timeline({ paused: true });
+
+          tl.fromTo(root.querySelector(".ct-title"), { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, 0.04);
+          tl.fromTo(root.querySelector(".ct-key"), { y: 18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power3.out" }, 0.16);
+          if (sub.textContent) tl.fromTo(sub, { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power3.out" }, 0.24);
+          tl.fromTo(box, { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, 0.2);
+
+          // typing: placeholder clears, one character per frame-quantised step (~14 chars/s)
+          typed.textContent = "";
+          tl.set(ph, { opacity: 0 }, typeAt);
+          const step = 1 / 14;
+          for (let i = 1; i <= keyword.length; i++) {
+            tl.set(typed, { textContent: keyword.slice(0, i) }, typeAt + i * step);
+          }
+          const typedEnd = typeAt + keyword.length * step;
+          // caret blinks (finite, deterministic) until the comment posts
+          const pressAt = typedEnd + 0.25;
+          const blinks = Math.max(0, Math.floor((pressAt - 0.2) / 0.5) - 1);
+          tl.fromTo(caret, { opacity: 1 }, { opacity: 0, duration: 0.25, ease: "steps(1)", yoyo: true, repeat: blinks * 2 + 1 }, 0.2);
+          tl.set(caret, { opacity: 0 }, pressAt);
+          tl.fromTo(post, { opacity: 0.45, scale: 1 }, { opacity: 1, scale: 0.9, duration: 0.1, ease: "power2.out" }, pressAt - 0.1);
+          tl.to(post, { scale: 1, duration: 0.15, ease: "back.out(2)" }, pressAt);
+          tl.to(box, { borderColor: "rgba(" + brandTok("--win-rgb", "128, 128, 128") + ", 0.9)", duration: 0.2 }, pressAt);
+
+          // DM reply slides in on the light plate; cover lands; footer mark settles
+          const dm = root.querySelector(".ct-dm");
+          const cover = root.querySelector(".ct-cover");
+          tl.fromTo(dm, { y: 80, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, dmAt);
+          tl.fromTo(cover, { y: 30, scale: 0.85, opacity: 0, rotation: -6 }, { y: 0, scale: 1, opacity: 1, rotation: -2, duration: 0.5, ease: "back.out(1.6)" }, dmAt + 0.25);
+          if (showFooter) tl.fromTo(foot, { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power3.out" }, dmAt + 0.45);
+          // idle life: the cover floats while the card holds
+          const settle = dmAt + 0.8;
+          const reps = Math.floor((span - settle) / 0.9) - 1;
+          if (reps >= 0) {
+            tl.to(cover, { y: -10, duration: 0.9, ease: "sine.inOut", yoyo: true, repeat: reps }, settle);
+          }
+          window.__timelines["cta"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>
