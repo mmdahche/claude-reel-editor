@@ -1,8 +1,9 @@
 # claude-reel-kit
 
 A Claude Code setup that edits short vertical videos (Reels, TikTok, Shorts) from a person talking
-to camera. Your client records a raw take of their script; your Claude Code agent cuts the retakes
-and pauses, cleans the voice, transcribes it word by word, lines graphics up with the voice, burns
+to camera. Your client records a raw take of their script; your Claude Code agent cuts the pauses,
+finds retakes and false starts against the script, shows you the cut before it builds anything,
+cleans the voice, transcribes it word by word, lines graphics up with the voice, burns
 in captions, adds sound effects and a music bed, masters the loudness, and hands back a finished
 1080x1920 video in two versions: with music and without.
 
@@ -11,7 +12,9 @@ with your agent sets up each client's colours, fonts, caption style and sound.
 
 ## What it does
 - Plans the video from the script (beats, scenes, layout) and checks the hook's structure.
-- Rough-cuts the raw take: keeps the last take of each line, cuts long pauses, never inside a word.
+- Rough-cuts the raw take: cuts long pauses, never inside a word, and marks retakes and false starts
+  against the script so the last take of each line is kept. Check the cut before the build; the
+  automatic retake tool (`scripts/retake_ranges.py`) is new and not yet proven on real footage.
 - Builds the picture with HyperFrames: scenes, the face, real footage as a split or a card, captions
   on a fixed line inside every app's safe zone.
 - Mixes and masters the sound, renders both exports, checks safe zones and loudness, and writes
